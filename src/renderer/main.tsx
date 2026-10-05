@@ -4,6 +4,8 @@ import { App } from './App';
 import { StudioProvider } from './context';
 import { DemoAdapter } from '../services/DemoAdapter';
 import { DesktopAdapter } from '../services/DesktopAdapter';
+import '@fontsource-variable/plus-jakarta-sans';
+import '@fontsource-variable/jetbrains-mono';
 import './styles.css';
 import './theme-mist-base.css';
 import './theme-mist.css';

@@ -82,6 +82,12 @@ try {
   const banner = await page.locator('.demo-banner').innerText();
   check('boots in desktop mode through window.drift (no demo fallback)', banner.includes('DESKTOP MODE') && !banner.includes('DEMO MODE'), banner.replace(/\s+/g, ' ').slice(0, 80));
   check('no demo fixtures in a fresh desktop library', (await page.locator('.highlight-card').count()) === 0);
+  const fonts = await page.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.all([document.fonts.load('600 16px "Plus Jakarta Sans Variable"'), document.fonts.load('16px "JetBrains Mono Variable"')]);
+    return { ui: document.fonts.check('600 16px "Plus Jakarta Sans Variable"'), mono: document.fonts.check('16px "JetBrains Mono Variable"'), body: getComputedStyle(document.body).fontFamily.split(',')[0] };
+  });
+  check('bundled fonts load from the app under the CSP (no network)', fonts.ui && fonts.mono && fonts.body.includes('Plus Jakarta'), JSON.stringify(fonts));
   check('renderer has no Node access', await page.evaluate(() => typeof window.require === 'undefined' && typeof window.process === 'undefined'));
 
   // ---- Settings: media folder, OBS port + password, connect
