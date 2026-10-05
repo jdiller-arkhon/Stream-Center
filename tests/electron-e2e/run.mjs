@@ -69,7 +69,9 @@ try {
 }
 const args = [root];
 if (voiceWav) args.unshift('--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${voiceWav}`);
-if (process.getuid?.() === 0) args.unshift('--no-sandbox'); // Chromium refuses root otherwise; the renderer sandbox flag stays on
+// Chromium's OS sandbox is unavailable as root and on CI runners that restrict user namespaces; the renderer's
+// sandbox webPreference is separate and stays on.
+if (process.getuid?.() === 0 || process.env.CI) args.unshift('--no-sandbox'); // Chromium refuses root, and CI runners lack the setuid sandbox helper
 const app = await electron.launch({
   args,
   env: { ...process.env, DRIFT_USER_DATA: path.join(tmp, 'userData'), DRIFT_TEST_MODE: '1', DRIFT_TEST_PICK_FILE: pickFile, DRIFT_TEST_OPEN_LOG: openLog },

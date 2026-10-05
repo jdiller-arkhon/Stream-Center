@@ -1,7 +1,9 @@
-name: Frontend validation
+name: CI
 on: [push, pull_request]
+
 jobs:
   renderer:
+    name: Renderer (contracts + browser demo)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -12,11 +14,11 @@ jobs:
       - name: Validate dependency lockfile
         run: node scripts/check-lockfile.mjs
       - run: npm ci
+      - name: Install FFmpeg (browser test generates a synthetic video)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npm run build
-      - run: npm test
+      - run: npm run test:renderer
       - run: npx playwright install --with-deps chromium
-      - run: sudo apt-get update
-      - run: sudo apt-get install -y ffmpeg
       - run: npm run test:browser
       - uses: actions/upload-artifact@v4
         if: always()
@@ -25,3 +27,33 @@ jobs:
           path: |
             docs/screenshots/*.png
             docs/browser-verification.json
+
+  desktop:
+    name: Desktop services + Electron end-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: System tools (FFmpeg, virtual display, TTS voice for the "Clip that" test)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg xvfb flite
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Service tests (fake OBS server + real FFmpeg)
+        run: npm run test:services
+      - name: Build renderer and desktop bundles
+        run: npm run build && npm run desktop:build
+      - name: Fetch offline voice model (SHA-256 verified)
+        run: npm run fetch:voice-model
+      - name: Electron end-to-end (real app driven through the UI)
+        env:
+          DRIFT_E2E_SCREENSHOTS: e2e-screenshots
+        run: xvfb-run -a node tests/electron-e2e/run.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-e2e-screenshots
+          path: e2e-screenshots/*.png
+          if-no-files-found: ignore
