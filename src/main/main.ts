@@ -8,7 +8,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import type { PickPathRequest } from '../services/contract/dto';
 import { DriftCore } from '../services/DriftCore';
-import { BridgeError, StudioBridge } from '../services/bridge/StudioBridge';
+import { BridgeError, StudioBridge, YOUTUBE_STUDIO_URL } from '../services/bridge/StudioBridge';
 import type { Platform, SecretStore } from '../services/core/platform';
 import { MemorySecretStore } from '../services/core/platform';
 import { validateUri } from '../services/sessions/launcher';
@@ -443,6 +443,11 @@ app.whenReady().then(async () => {
   bridge = new StudioBridge(core, {
     voiceModelPath,
     onVoiceWanted: (wanted) => setVoiceHost(wanted),
+    async openYouTubeStudio() {
+      // A fixed constant, never a renderer-supplied URL. Test mode records it instead of opening a browser.
+      if (TEST_MODE && process.env.DRIFT_TEST_OPEN_LOG) return fs.appendFileSync(process.env.DRIFT_TEST_OPEN_LOG, YOUTUBE_STUDIO_URL + '\n');
+      await shell.openExternal(YOUTUBE_STUDIO_URL, { activate: true });
+    },
     publish: (snapshot) => {
       for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('drift:state', snapshot);
     },

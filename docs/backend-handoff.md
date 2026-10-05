@@ -17,6 +17,19 @@ Status date: 2026-10-05. Branch: `claude/wizardly-johnson-9f4gfl`.
   - **Isolation:** it runs in a **hidden, sandboxed voice window** (`src/voice`, served from `drift-app://voice/`). That window has its own CSP, because the WebAssembly build needs `'unsafe-eval'`, plus a two-message preload and microphone permission. The main UI keeps its strict CSP and gets no microphone access.
   - **Saving:** when the phrase is heard, main calls the same save-replay path as the button. If the replay buffer is off, the user gets a notice instead.
   - **Model files:** the model is fetched with a pinned SHA-256 by `npm run fetch:voice-model` and bundled by `desktop:package` into `resources/models`.
+- **"Mark that" voice command.** Same recogniser and grammar (`mark that | mark it` added). It adds `Marker · H:MM:SS into the recording` (or session) to the active session's notes timeline, so moments are easy to find when editing. It needs a running session, not the replay buffer. `snapshot.voice.lastCommand` (`'clip' | 'mark'`, optional) tells the UI which command was heard.
+- **YouTube toolkit** (desktop only). Nothing signs in to Google or uploads; the user uploads in YouTube Studio.
+  - **Loud-moment finder** (`suggestMoments`): FFmpeg `ebur128` momentary loudness is streamed (10 values/s) and smoothed to 3 s short-term loudness. The loudest passages, spaced ≥ 20 s apart, are returned with how far they sit above the clip's median level. Results are cached per file and mtime. ClipForge shows them as chips that seek the playhead.
+  - **Make a Short:** reframes the draft to 9:16 with safe areas, cuts up to 30 s around the loudest moment (70 % lead-up), and switches the export to 1080×1920 with loudness normalisation.
+  - **Loudness normalisation:** `ExportSettings.loudnessLufs` (optional) appends single-pass `loudnorm=I=-14:TP=-1.5:LRA=11` after the mix. The UI preset field is `loudness?: boolean`. Measured result in tests: −14.0 LUFS.
+  - **YouTube presets** in the export dialog: Shorts 1080×1920 / upload 1440p60, both H.264 + −14 LUFS.
+  - **YouTube kit** (`youtubeKit`, from a completed job): probes and measures the real file, then checks it against YouTube's limits (MP4/H.264/AAC, Shorts ≤ 3:00 when vertical, > 15 min needs a verified account, 12 h/256 GB maximum, 16:9 or 9:16, ≥ 1080p, 24–60 fps, loudness around −14 LUFS, true peak ≤ −1 dBTP).
+    - It drafts a title (≤ 100 chars, `#Shorts` for Shorts), a description with chapters, and tags (≤ 500 chars). Chapters come from the exported timeline segments and are only included when YouTube's rules are met: starts at 0:00, at least 3 chapters, each ≥ 10 s.
+    - It returns up to four 1280×720 candidate frames (loudest moment plus 25/50/75 %) as JPEG data URLs.
+  - **Thumbnail maker:** the renderer composes frame + title + accent on a canvas. `saveThumbnail` accepts only a 1280×720 JPEG ≤ 2 MB (checked from the JPEG header in main), writes `<video> thumbnail.jpg` next to the export without overwriting, and reveals it.
+  - **Upload hand-off:** `revealOutput` shows the file; `openYouTubeStudio` opens the fixed constant `https://studio.youtube.com/` (never a renderer-supplied URL).
+  - **Direct API upload is deferred.** It needs a Google Cloud OAuth client, the `youtube.upload` scope and Google's app verification (unverified apps upload as private only). That is a product decision, not a code gap.
+- **CI** (`.github/workflows/frontend.yml`): two jobs. *Renderer* runs the lockfile check, build, contract tests and the browser demo. *Desktop* installs FFmpeg/Xvfb/flite first, then typechecks, runs the service tests, builds, fetches the voice model and runs the Electron end-to-end suite. Earlier runs failed because the service tests ran before FFmpeg was installed. A vitest global setup now fails fast with a clear message when FFmpeg is missing.
 - **Logo.** The supplied drift logo is redrawn as vector artwork (`src/renderer/components/Logo.tsx`): brand gradient in the sidebar, white on the hero, plus `public/favicon.svg` and `build/icon.png`/`icon.svg` for the installer.
 
 ## How the UI reaches the services
@@ -184,10 +197,10 @@ npm run dist:win           # NSIS installer → release/ (run on Windows)
 
 | Suite | Result | What it proves |
 | --- | --- | --- |
-| `npm run test:e2e` | **38/38** | Real Electron app, real built UI, clicked through every function. It checks both what the UI shows and the real effect behind it. |
-| `npm run test:services` | **50/50** | Services and `StudioBridge` against a fake obs-websocket v5 server and real FFmpeg. Every snapshot and response passes the renderer's own validators. |
+| `npm run test:e2e` | **52/52** | Real Electron app, real built UI, clicked through every function. It checks both what the UI shows and the real effect behind it. |
+| `npm run test:services` | **63/63** | Services and `StudioBridge` against a fake obs-websocket v5 server and real FFmpeg. Every snapshot and response passes the renderer's own validators. |
 | `npm run test:renderer` | **14/14** | ChatGPT's contract and adapter tests. |
-| `npm run test:browser` | **38/38** | ChatGPT's browser demo suite: layouts, overflow, focus, keyboard and dialogs, run with the new theme. |
+| `npm run test:browser` | **37/37** | ChatGPT's browser demo suite: layouts, overflow, focus, keyboard and dialogs, run with the new theme. |
 | `npm run typecheck` | clean | Renderer and desktop configs (TypeScript 7). |
 
 The end-to-end run covers:
@@ -201,6 +214,8 @@ The end-to-end run covers:
 - ClipForge: plays the real clip, trims it, and exports it;
 - the export is exactly 3.500 s at 1920×1080, H.264/AAC, with audio and video lengths equal;
 - Open Output, and import through the native picker;
+- saying “Clip that” into a fake microphone (synthesized speech) saves a replay;
+- Make a Short → Shorts preset → a 1080×1920 export at −14.0 LUFS → YouTube kit checks pass on the real file, with a `#Shorts` title → a 1280×720 thumbnail saved next to the video → Open YouTube Studio opens the fixed URL;
 - scene switch with real scene names, and a decoded OBS preview frame;
 - Go Live, still live after changing screens, then End stream, with the live warning cleared;
 - mute and unmute of the OBS mic;
@@ -221,5 +236,6 @@ The end-to-end run covers:
 ## Pending / suggested next work
 
 - Wire ChatGPT's UI through the `DesktopAdapter` once the frontend lands (table above), and run the Windows checklist.
+- Optional direct YouTube upload (needs a Google OAuth client and app verification; see above). “Mark that” is covered by the bridge test, not yet by a spoken end-to-end check.
 - Stream Deck plugin (optional), PresentMon-based game FPS (optional), and live preview via OBS virtual camera or NDI (optional).
 - Undo/redo history stays in the renderer. The backend persists every saved revision only as the latest one.

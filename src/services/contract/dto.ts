@@ -641,6 +641,8 @@ export const ExportSettings = z.object({
   codec: z.enum(['h264', 'hevc']),
   encoder: z.enum(['auto', 'software', 'nvenc', 'qsv', 'amf']),
   audioBitrateKbps: z.number().int().min(64).max(320),
+  /** Normalise programme loudness to this target (EBU R128 loudnorm); null/absent = leave as mixed. */
+  loudnessLufs: z.number().min(-24).max(-9).nullable().optional(),
 });
 export type ExportSettings = z.infer<typeof ExportSettings>;
 

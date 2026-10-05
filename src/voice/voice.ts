@@ -1,6 +1,6 @@
 /**
  * Hidden, sandboxed voice host. Captures the default microphone and runs the offline Vosk
- * recogniser with a closed grammar ("clip that" | unknown). It has no access to the app
+ * recogniser with a closed grammar ("clip that" | "mark that" | unknown). It has no access to the app
  * bridge: it can only report status and "heard" events through window.driftVoice.
  * Loaded from drift-app://voice/ with its own CSP (the WASM build needs 'unsafe-eval').
  */
@@ -13,7 +13,7 @@ declare global {
 }
 
 const MODEL_URL = 'drift-media://model/vosk-small-en';
-const PHRASES = ['clip that', 'clip it'];
+const PHRASES = ['clip that', 'clip it', 'mark that', 'mark it'];
 const MIN_CONFIDENCE = 0.55;
 
 async function main(): Promise<void> {

@@ -12,6 +12,15 @@ export interface ProbeResult {
   bitRate: number | null;
 }
 
+export interface LoudnessAnalysis {
+  /** Integrated programme loudness (LUFS); null when the file has no audio. */
+  integratedLufs: number | null;
+  /** True peak (dBTP). */
+  truePeakDb: number | null;
+  /** Momentary loudness (LUFS) every 100 ms. */
+  momentary: number[];
+}
+
 export interface ToolPaths {
   ffmpeg: string | null;
   ffprobe: string | null;
@@ -175,6 +184,72 @@ export class MediaTools {
       fail('FFMPEG_FAILED', 'Could not read audio for waveform', { detail: r.stderr.slice(-2000) });
     }
     return Uint8Array.from(out);
+  }
+
+  /**
+   * EBU R128 loudness analysis: integrated loudness, true peak and the momentary
+   * loudness curve (10 values per second, streamed so memory stays small).
+   */
+  async loudness(file: string, signal?: AbortSignal): Promise<LoudnessAnalysis> {
+    const ffmpeg = this.requireFfmpeg();
+    if (!isFile(file)) fail('MEDIA_MISSING', 'Media file not found', { detail: file });
+    const momentary: number[] = [];
+    let t = 0;
+    let carry = '';
+    const r = await run(
+      ffmpeg,
+      ['-hide_banner', '-nostats', '-nostdin', '-loglevel', 'info', '-i', file, '-vn', '-af', 'ebur128=metadata=1:peak=true,ametadata=mode=print:key=lavfi.r128.M:file=-', '-f', 'null', '-'],
+      {
+        lowPriority: true,
+        signal,
+        timeoutMs: 30 * 60_000,
+        onStdout: (chunk) => {
+          const lines = (carry + chunk).split('\n');
+          carry = lines.pop() ?? '';
+          for (const line of lines) {
+            const pt = /pts_time:([\d.]+)/.exec(line);
+            if (pt) t = Number(pt[1]);
+            const m = /lavfi\.r128\.M=(-?[\d.]+|-inf)/.exec(line);
+            if (m) {
+              const idx = Math.round(t * 10);
+              const v = m[1] === '-inf' ? -120 : Number(m[1]);
+              // One value per 100 ms slot; ebur128 emits per audio frame.
+              momentary[idx] = Math.max(momentary[idx] ?? -120, v);
+            }
+          }
+        },
+      },
+    );
+    if (r.code !== 0) {
+      if (/matches no streams|does not contain any stream/i.test(r.stderr)) return { integratedLufs: null, truePeakDb: null, momentary: [] };
+      fail('FFMPEG_FAILED', 'Could not measure loudness', { detail: r.stderr.slice(-2000) });
+    }
+    const summary = r.stderr.slice(r.stderr.lastIndexOf('Summary:'));
+    const num = (re: RegExp) => {
+      const m = re.exec(summary);
+      return m && Number.isFinite(Number(m[1])) ? Number(m[1]) : null;
+    };
+    for (let i = 0; i < momentary.length; i++) if (momentary[i] === undefined) momentary[i] = momentary[i - 1] ?? -120;
+    return { integratedLufs: num(/I:\s+(-?[\d.]+) LUFS/), truePeakDb: num(/Peak:\s+(-?[\d.]+) dBFS/), momentary };
+  }
+
+  /** One video frame as JPEG bytes, scaled and centre-cropped to fill width × height. */
+  async frameJpeg(file: string, atMs: number, width: number, height: number): Promise<Buffer> {
+    const ffmpeg = this.requireFfmpeg();
+    if (!isFile(file)) fail('MEDIA_MISSING', 'Media file not found', { detail: file });
+    const chunks: Buffer[] = [];
+    const r = await run(
+      ffmpeg,
+      [
+        '-hide_banner', '-loglevel', 'error', '-nostdin', '-ss', (atMs / 1000).toFixed(3), '-i', file, '-frames:v', '1',
+        '-vf', `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${width}:${height},setsar=1`,
+        '-q:v', '3', '-f', 'image2pipe', '-c:v', 'mjpeg', 'pipe:1',
+      ],
+      { timeoutMs: 60_000, lowPriority: true, binaryStdout: (c) => chunks.push(c) },
+    );
+    const out = Buffer.concat(chunks);
+    if (r.code !== 0 || out.length < 4) fail('FFMPEG_FAILED', 'Could not read a frame from the video', { detail: r.stderr.slice(-2000) });
+    return out;
   }
 
   /** Lists filters compiled into this ffmpeg build (cached). */

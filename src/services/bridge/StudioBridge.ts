@@ -9,6 +9,7 @@
  *
  * No Electron imports: runs under plain Node in tests; main.ts wires it to IPC.
  */
+import fs from 'node:fs';
 import path from 'node:path';
 import type {
   Capabilities as UiCapabilities,
@@ -17,6 +18,7 @@ import type {
   EditProject as UiProject,
   ExportPreset as UiExportPreset,
   Job as UiJob,
+  Moment as UiMoment,
   Operation,
   OperationMap,
   Session as UiSession,
@@ -24,6 +26,7 @@ import type {
   StructuredError,
   StudioSettings as UiSettings,
   StudioSnapshot,
+  YouTubeKit as UiYouTubeKit,
 } from '../../shared/contracts';
 import { validateProfile, validateProject, validateRequest } from '../../shared/validation';
 import type { DriftCore } from '../DriftCore';
@@ -35,6 +38,7 @@ import { newId } from '../core/ids';
 import { diskStatus, isFile, safeAbsolutePath, sanitizeFileStem } from '../core/paths';
 import { toAsset, type ClipRecord } from '../library/ClipLibrary';
 import { isProcessRunning, launch, processNameFor } from '../sessions/launcher';
+import { buildChapters, buildMetadata, findMoments, isShort, jpegSize, YOUTUBE_LOUDNESS_LUFS, youtubeChecks } from '../media/youtube';
 
 const KV_PROFILES = 'ui.profiles';
 const KV_SELECTED = 'ui.selectedProfileId';
@@ -51,6 +55,9 @@ const MEDIA_EXT = /\.(mp4|mkv|mov|webm|flv|ts|m4v|avi)$/i;
 /** Placeholder text the renderer's setup form uses before a game is named. */
 const GAME_PLACEHOLDER = 'Choose a game';
 const NAME_PLACEHOLDER = 'Set up your first profile';
+/** The only web page the app opens: uploads stay a manual, signed-in step in YouTube Studio. */
+export const YOUTUBE_STUDIO_URL = 'https://studio.youtube.com/';
+const THUMB_MAX_BYTES = 2 * 1024 * 1024; // YouTube's custom thumbnail limit
 
 export class BridgeError extends Error {
   constructor(readonly error: StructuredError) {
@@ -78,6 +85,10 @@ export function toStructured(e: DriftError): StructuredError {
   return { code, message: e.message, recoverable: e.retryable || code === 'INVALID_INPUT' || code === 'DISCONNECTED' || code === 'UNAVAILABLE', details: e.detail };
 }
 
+const formatClock = (ms: number) => {
+  const t = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+};
 const dbToGain = (db: number | null) => (db === null ? 1 : Math.max(0, Math.min(1, 10 ** (db / 20))));
 const gainToDb = (gain: number) => (gain <= 0.00001 ? -100 : Math.max(-100, Math.min(26, Math.round(20 * Math.log10(gain) * 10) / 10)));
 
@@ -89,6 +100,8 @@ export interface BridgeOptions {
   voiceModelPath?: () => string | null;
   /** Called when the voice listener should start (true) or stop (false). */
   onVoiceWanted?: (wanted: boolean) => void;
+  /** Opens YOUTUBE_STUDIO_URL in the default browser (absent in tests without a browser). */
+  openYouTubeStudio?: () => Promise<void>;
 }
 
 export class StudioBridge {
@@ -107,7 +120,7 @@ export class StudioBridge {
   private disk: { freeBytes: number } | null = null;
   private streamLabel: string | null = null;
   private disposed = false;
-  private voice: NonNullable<StudioSnapshot['voice']> = { state: 'off', detail: null, device: null, lastHeardAt: null };
+  private voice: NonNullable<StudioSnapshot['voice']> = { state: 'off', detail: null, device: null, lastHeardAt: null, lastCommand: null };
   private lastVoiceClip = 0;
 
   constructor(
@@ -418,13 +431,31 @@ export class StudioBridge {
     this.schedule();
   }
 
-  /** The voice host heard the phrase: save a replay exactly like the Save Replay button. */
+  /**
+   * The voice host heard a phrase. "Clip that" saves a replay exactly like the Save Replay
+   * button; "Mark that" drops a timestamped marker in the session for editing later.
+   */
   async voiceHeard(text: string, confidence: number): Promise<void> {
     const now = Date.now();
-    if (now - this.lastVoiceClip < 4000) return; // one clip per utterance
+    if (now - this.lastVoiceClip < 4000) return; // one action per utterance
     this.lastVoiceClip = now;
-    this.voice = { ...this.voice, lastHeardAt: new Date(now).toISOString() };
+    this.voice = { ...this.voice, lastHeardAt: new Date(now).toISOString(), lastCommand: text.startsWith('mark') ? 'mark' : 'clip' };
     const st = this.core.obs.getState();
+    if (text.startsWith('mark')) {
+      const session = this.core.sessions.getActive();
+      if (!session) {
+        this.core.notice('warning', 'Heard “Mark that”', 'Start a session first. Markers are saved to the active session.');
+      } else {
+        const rec = st.recording.active && st.recording.durationMs !== null ? st.recording.durationMs : null;
+        const at = rec ?? now - Date.parse(session.startedAt);
+        const where = `${rec !== null ? 'into the recording' : 'into the session'}`;
+        const stamp = formatClock(at);
+        this.core.sessions.recordActive('note', `Marker · ${stamp} ${where} (voice)`);
+        this.core.notice('success', 'Marked', `${stamp} ${where}`);
+      }
+      this.schedule();
+      return;
+    }
     if (!this.core.obs.connected || !st.replayBuffer.active) {
       this.core.notice('warning', 'Heard “Clip that”', 'The OBS replay buffer is not running, so nothing was saved.');
       this.schedule();
@@ -478,7 +509,7 @@ export class StudioBridge {
     const ops: readonly string[] = [
       'connect', 'disconnect', 'selectProfile', 'saveProfile', 'prepareSession', 'startSession', 'endSession', 'launchGame',
       'recording', 'replay', 'saveReplay', 'scene', 'streaming', 'audio', 'importClips', 'updateClip', 'saveProject', 'export',
-      'cancelJob', 'retryJob', 'openOutput', 'saveSettings', 'sessionNotes', 'importNative', 'relinkNative', 'pickMusic', 'setObsPassword',
+      'cancelJob', 'retryJob', 'openOutput', 'saveSettings', 'sessionNotes', 'importNative', 'relinkNative', 'pickMusic', 'setObsPassword', 'suggestMoments', 'youtubeKit', 'saveThumbnail', 'revealOutput', 'openYouTubeStudio',
     ];
     if (operation === 'scenario' || operation === 'reset') throw new BridgeError({ code: 'UNAVAILABLE', message: 'Demo scenarios are disabled in desktop mode', recoverable: false, details: null });
     if (!ops.includes(operation)) throw new BridgeError({ code: 'INVALID_INPUT', message: 'Operation not allowlisted', recoverable: false, details: null });
@@ -648,6 +679,21 @@ export class StudioBridge {
       case 'openOutput':
         ok(await core.invoke('system.openOutput', { jobId: (p as { id: string }).id }));
         return undefined;
+      case 'revealOutput':
+        ok(await core.invoke('system.reveal', { target: { kind: 'jobOutput', id: (p as { id: string }).id } }));
+        return undefined;
+      case 'suggestMoments':
+        return this.suggestMoments((p as { clipId: string }).clipId);
+      case 'youtubeKit':
+        return this.youtubeKit((p as { jobId: string }).jobId);
+      case 'saveThumbnail': {
+        const { jobId, dataUrl } = p as OperationMap['saveThumbnail']['input'];
+        return this.saveThumbnail(jobId, dataUrl);
+      }
+      case 'openYouTubeStudio':
+        if (!this.opts.openYouTubeStudio) fail('UNSUPPORTED', 'Opening the browser is not available here');
+        await this.opts.openYouTubeStudio();
+        return undefined;
       case 'saveSettings':
         return this.saveSettings(p as UiSettings);
       case 'sessionNotes': {
@@ -784,6 +830,112 @@ export class StudioBridge {
     void this.refreshDisk();
   }
 
+  // ---------------------------------------------------------------- YouTube helpers
+
+  private momentCache = new Map<string, UiMoment[]>();
+
+  private async suggestMoments(clipId: string): Promise<UiMoment[]> {
+    const rec = this.core.library.getRecord(clipId);
+    if (!isFile(rec.path)) fail('MEDIA_MISSING', 'The recording was moved or deleted. Relink it first.', { detail: rec.path });
+    const key = `${rec.path}|${fs.statSync(rec.path).mtimeMs}`;
+    const cached = this.momentCache.get(key);
+    if (cached) return cached;
+    if (!rec.hasAudio) fail('VALIDATION', 'This clip has no audio, so loud moments cannot be found.');
+    const loud = await this.core.tools.loudness(rec.path);
+    const moments = findMoments(loud.momentary).map((m) => ({ atMs: Math.min(m.atMs, rec.durationMs), excessLu: m.excessLu }));
+    this.momentCache.set(key, moments);
+    if (this.momentCache.size > 50) this.momentCache.delete(this.momentCache.keys().next().value!);
+    return moments;
+  }
+
+  private finishedOutput(jobId: string): { job: Job; file: string } {
+    const job = this.core.jobs.get(jobId);
+    if (job.state !== 'succeeded' || !job.outputPath) fail('CONFLICT', 'The export has not finished yet');
+    if (!isFile(job.outputPath)) fail('MEDIA_MISSING', 'The exported file was moved or deleted', { detail: job.outputPath });
+    return { job, file: job.outputPath };
+  }
+
+  private async youtubeKit(jobId: string): Promise<UiYouTubeKit> {
+    const { job, file } = this.finishedOutput(jobId);
+    const tools = this.core.tools;
+    const probe = await tools.probe(file);
+    const loud = probe.audio ? await tools.loudness(file) : { integratedLufs: null, truePeakDb: null, momentary: [] };
+    const checks = youtubeChecks(probe, loud, fs.statSync(file).size);
+    const short = isShort(probe);
+
+    // Chapters follow the exported timeline; game title from the clips used (else the game setup).
+    let parts: Array<{ title: string; durationMs: number }> = [];
+    let game: string | null = this.uiProfiles()[0]?.game ?? null;
+    let name = path.basename(file, path.extname(file));
+    try {
+      const project = this.core.projects.get(job.refId ?? '');
+      name = project.name || name;
+      const items = project.tracks[0]?.items ?? [];
+      const titles = items.map((it) => {
+        try {
+          const r = this.core.library.getRecord(it.clipId);
+          game = r.gameTitle ?? game;
+          return path.basename(r.fileName, path.extname(r.fileName));
+        } catch {
+          return '';
+        }
+      });
+      const distinct = new Set(titles).size === titles.length && titles.every(Boolean);
+      parts = items.map((it, i) => ({ title: distinct ? titles[i]! : `Part ${i + 1}`, durationMs: it.sourceOutMs - it.sourceInMs }));
+    } catch {
+      /* project deleted: no chapters */
+    }
+    const { chapters, reason } = short ? { chapters: [], reason: 'Shorts do not show chapters.' } : buildChapters(parts);
+    const meta = buildMetadata({ name, game: game && game !== GAME_PLACEHOLDER ? game : null, short, chapters });
+
+    // Thumbnail candidates: the loudest moment (if any) plus evenly spaced frames.
+    const d = probe.durationMs;
+    const best = findMoments(loud.momentary, 1)[0]?.atMs;
+    const times = [...new Set([best, d * 0.25, d * 0.5, d * 0.75].filter((t): t is number => t !== undefined).map((t) => Math.round(Math.min(Math.max(t, 0), Math.max(0, d - 200)))))].slice(0, 4);
+    const frames: string[] = [];
+    if (probe.video) {
+      for (const t of times) {
+        try {
+          frames.push('data:image/jpeg;base64,' + (await tools.frameJpeg(file, t, 1280, 720)).toString('base64'));
+        } catch {
+          /* skip unreadable frame */
+        }
+      }
+    }
+    return {
+      jobId,
+      fileName: path.basename(file),
+      durationMs: d,
+      width: probe.video?.width ?? 0,
+      height: probe.video?.height ?? 0,
+      isShort: short,
+      loudnessLufs: loud.integratedLufs,
+      checks,
+      chapters,
+      chapterNote: reason,
+      title: meta.title,
+      description: meta.description,
+      tags: meta.tags,
+      frames,
+    };
+  }
+
+  private saveThumbnail(jobId: string, dataUrl: string): { fileName: string } {
+    const { file } = this.finishedOutput(jobId);
+    const bytes = Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64');
+    const size = jpegSize(bytes);
+    if (!size) fail('VALIDATION', 'The thumbnail is not a valid JPEG image');
+    if (size.width !== 1280 || size.height !== 720) fail('VALIDATION', 'YouTube thumbnails should be 1280×720', { detail: `${size.width}×${size.height}` });
+    if (bytes.length > THUMB_MAX_BYTES) fail('VALIDATION', 'YouTube thumbnails must be 2 MB or smaller');
+    const dir = path.dirname(file);
+    const stem = path.basename(file, path.extname(file));
+    let out = path.join(dir, `${stem} thumbnail.jpg`);
+    for (let n = 2; fs.existsSync(out); n++) out = path.join(dir, `${stem} thumbnail ${n}.jpg`);
+    fs.writeFileSync(out, bytes, { flag: 'wx' });
+    this.core.platform.showItemInFolder(out);
+    return { fileName: path.basename(out) };
+  }
+
   private resolveExportDir(destination: string): string {
     const d = destination.trim();
     if (path.isAbsolute(d)) return safeAbsolutePath(d, 'Export destination');
@@ -880,5 +1032,6 @@ export function exportSettings(preset: UiExportPreset): ExportSettings {
     codec: preset.codec,
     encoder: 'auto',
     audioBitrateKbps: 192,
+    loudnessLufs: preset.loudness ? YOUTUBE_LOUDNESS_LUFS : null,
   };
 }

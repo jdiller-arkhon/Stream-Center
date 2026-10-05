@@ -10,7 +10,7 @@ const CHANNELS = { readState: 'drift:readState', request: 'drift:request', state
 const OPERATIONS = new Set([
   'connect', 'disconnect', 'selectProfile', 'saveProfile', 'prepareSession', 'startSession', 'endSession', 'launchGame',
   'recording', 'replay', 'saveReplay', 'scene', 'streaming', 'audio', 'importClips', 'updateClip', 'saveProject', 'export',
-  'cancelJob', 'retryJob', 'openOutput', 'saveSettings', 'sessionNotes', 'importNative', 'relinkNative', 'pickMusic', 'setObsPassword',
+  'cancelJob', 'retryJob', 'openOutput', 'saveSettings', 'sessionNotes', 'importNative', 'relinkNative', 'pickMusic', 'setObsPassword', 'suggestMoments', 'youtubeKit', 'saveThumbnail', 'revealOutput', 'openYouTubeStudio',
   'scenario', 'reset',
 ]);
 

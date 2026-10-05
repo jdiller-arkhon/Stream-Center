@@ -28,10 +28,16 @@ function settings(value: unknown) { const p = obj(value); for (const k of ['medi
     str(p[k], k); number(p.obsPort, 1, 65535, 'port'); one(p.appearance, ['studio', 'contrast'], 'appearance'); bool(p.transcription, 'transcription'); bool(p.shortcuts, 'shortcuts'); one(p.workerLimit, [1, 2], 'worker limit'); if (p.voiceClip !== undefined) bool(p.voiceClip, 'voice command'); }
 function job(value: unknown) { const j = obj(value); for (const k of ['id', 'projectId', 'name'])
     str(j[k], k); one(j.status, ['accepted', 'processing', 'completed', 'failed', 'canceled'], 'job status'); number(j.progress, 0, 100, 'progress'); bool(j.simulated, 'simulated'); nullable(j.outputHandle, x => str(x, 'output')); nullable(j.error, x => { const e = obj(x); str(e.code, 'error code'); str(e.message, 'error'); bool(e.recoverable, 'recoverable'); nullable(e.details, v => str(v, 'details')); }); }
+function youtubeKit(value: unknown) { const k = obj(value); id(k.jobId); for (const f of ['fileName', 'title', 'description'])
+    str(k[f], f, 20000); for (const f of ['durationMs', 'width', 'height'])
+    number(k[f], 0, 86400000, f); bool(k.isShort, 'short'); nullable(k.loudnessLufs, x => number(x, -200, 50, 'loudness')); nullable(k.chapterNote, x => str(x, 'chapter note')); list(k.tags, 'tags').forEach(x => str(x, 'tag'));
+    list(k.checks, 'checks').forEach(c => { const v = obj(c); str(v.id, 'check'); str(v.label, 'check'); str(v.detail, 'check'); one(v.status, ['pass', 'warn', 'fail'], 'check status'); });
+    list(k.chapters, 'chapters').forEach(c => { const v = obj(c); number(v.atMs, 0, 86400000, 'chapter'); str(v.title, 'chapter'); });
+    list(k.frames, 'frames').forEach(f => { if (!str(f, 'frame', 3_000_000).startsWith('data:image/jpeg;base64,')) invalid('Invalid frame'); }); }
 export const validateProfile = (p: unknown): SessionProfile => { profile(p); return p as SessionProfile; };
 export const validateProject = (p: unknown): EditProject => { project(p); return p as EditProject; };
 export function validateRequest(op: Operation, input: unknown): void {
-    if (['disconnect', 'endSession', 'saveReplay', 'reset', 'importNative', 'pickMusic'].includes(op)) {
+    if (['disconnect', 'endSession', 'saveReplay', 'reset', 'importNative', 'pickMusic', 'openYouTubeStudio'].includes(op)) {
         if (input !== undefined)
             invalid('Expected no input');
         return;
@@ -96,11 +102,25 @@ export function validateRequest(op: Operation, input: unknown): void {
                 one(e.fps, [30, 60], 'fps');
                 one(e.quality, ['balanced', 'high'], 'quality');
                 one(e.codec, ['h264', 'hevc'], 'codec');
+                if (e.loudness !== undefined)
+                    bool(e.loudness, 'loudness');
             }
             break;
         case 'setObsPassword':
             nullable(p.password, x => str(x, 'password', 512));
             break;
+        case 'suggestMoments':
+            id(p.clipId);
+            break;
+        case 'youtubeKit':
+            id(p.jobId);
+            break;
+        case 'saveThumbnail':
+            id(p.jobId);
+            if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(str(p.dataUrl, 'thumbnail', 3_000_000)))
+                invalid('Thumbnail must be a JPEG image');
+            break;
+        case 'revealOutput':
         case 'relinkNative':
         case 'selectProfile':
         case 'cancelJob':
@@ -152,7 +172,7 @@ export function validateSnapshot(value: unknown): StudioSnapshot {
     nullable(t.gameFps, x => number(x, 0, 2000, 'game fps'));
     nullable(t.diskFreeBytes, x => number(x, 0, Number.MAX_SAFE_INTEGER, 'storage'));
     list(p.warnings, 'warnings').forEach(x => str(x, 'warning'));
-    if (p.voice !== undefined) { const v = obj(p.voice); one(v.state, ['off', 'loading', 'listening', 'error'], 'voice state'); nullable(v.detail, x => str(x, 'voice detail')); nullable(v.device, x => str(x, 'voice device')); nullable(v.lastHeardAt, date); }
+    if (p.voice !== undefined) { const v = obj(p.voice); one(v.state, ['off', 'loading', 'listening', 'error'], 'voice state'); nullable(v.detail, x => str(x, 'voice detail')); nullable(v.device, x => str(x, 'voice device')); nullable(v.lastHeardAt, date); if (v.lastCommand !== undefined) nullable(v.lastCommand, x => one(x, ['clip', 'mark'], 'voice command')); }
     return p as unknown as StudioSnapshot;
 }
 export function validateResponse(op: Operation, value: unknown): unknown {
@@ -174,6 +194,12 @@ export function validateResponse(op: Operation, value: unknown): unknown {
         nullable(value, x => { const m = obj(x); str(m.handle, 'music handle'); str(m.name, 'music name'); });
     else if (op === 'export')
         job(value);
+    else if (op === 'suggestMoments')
+        list(value, 'moments').forEach(m => { const v = obj(m); number(v.atMs, 0, 86400000, 'moment'); number(v.excessLu, -200, 200, 'loudness'); });
+    else if (op === 'youtubeKit')
+        youtubeKit(value);
+    else if (op === 'saveThumbnail')
+        str(obj(value).fileName, 'file name');
     else if (op === 'prepareSession')
         list(obj(value).steps, 'steps').forEach(s => { const v = obj(s); str(v.label, 'label'); bool(v.ok, 'ok'); str(v.detail, 'detail'); });
     else if (value !== undefined && value !== null)
@@ -182,7 +208,7 @@ export function validateResponse(op: Operation, value: unknown): unknown {
 }
 /** Renderer check; main must independently repeat capability and authorization checks. */
 export function assertCapability(state: StudioSnapshot, operation: Operation): void {
-    const map: Partial<Record<Operation, Capability>> = { connect: 'obs', recording: 'recording', replay: 'replay', saveReplay: 'replay', scene: 'obs', streaming: 'streaming', audio: 'obsAudio', launchGame: 'launch', startSession: 'launch', importClips: 'import', importNative: 'import', relinkNative: 'import', pickMusic: 'import', export: 'export' };
+    const map: Partial<Record<Operation, Capability>> = { connect: 'obs', recording: 'recording', replay: 'replay', saveReplay: 'replay', scene: 'obs', streaming: 'streaming', audio: 'obsAudio', launchGame: 'launch', startSession: 'launch', importClips: 'import', importNative: 'import', relinkNative: 'import', pickMusic: 'import', export: 'export', suggestMoments: 'export', youtubeKit: 'export' };
     const capability = map[operation];
     if (!capability)
         return;

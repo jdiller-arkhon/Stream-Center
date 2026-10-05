@@ -348,4 +348,80 @@ describe('StudioBridge (renderer protocol v1 over desktop services)', () => {
     const revs = published.map((s) => (s as StudioSnapshot & { revision: number }).revision);
     expect([...revs].sort((a, b) => a - b)).toEqual(revs);
   });
+  it('YouTube: loud-moment detection, Short export at -14 LUFS, upload kit, thumbnail and Studio hand-off', async () => {
+    // 20 s clip: quiet tone, with a loud burst at 12–14 s.
+    const src = path.join(dir, 'media', 'burst.mp4');
+    fs.mkdirSync(path.dirname(src), { recursive: true });
+    execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30:duration=20', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=20',
+      '-filter_complex', "[1:a]volume='if(between(t,12,14),1.0,0.03)':eval=frame[a]", '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', src]);
+    platform.pickResult = [src];
+    const [clip] = await call<ClipAsset[]>('importNative');
+    await waitFor(async () => ((await state()).clips.find((c) => c.id === clip!.id)?.status === 'ready' ? true : null));
+
+    const moments = await call<Array<{ atMs: number; excessLu: number }>>('suggestMoments', { clipId: clip!.id });
+    expect(moments.length).toBeGreaterThan(0);
+    expect(moments[0]!.atMs).toBeGreaterThan(10_000);
+    expect(moments[0]!.atMs).toBeLessThan(15_000);
+    expect(moments[0]!.excessLu).toBeGreaterThan(10);
+
+    // Vertical Short around the moment, loudness normalised for YouTube.
+    const draft = makeProject(clip!);
+    draft.name = 'Clutch moment';
+    draft.aspect = '9:16';
+    draft.tracks[0]!.segments = [{ ...draft.tracks[0]!.segments[0]!, inMs: 6_000, outMs: 16_000, offsetMs: 0 }];
+    await call('saveProject', draft);
+    const job = await call<{ id: string }>('export', { project: draft, preset: { destination: 'Exports', aspect: '9:16', resolution: 720, fps: 30, quality: 'balanced', codec: 'h264', loudness: true }, simulateFailure: false });
+    const done = await waitFor(() => {
+      const j = core.jobs.get(job.id);
+      return ['succeeded', 'failed'].includes(j.state) ? j : null;
+    }, { timeoutMs: 90_000 });
+    expect(done.state, JSON.stringify(done.error)).toBe('succeeded');
+    const out = probe(done.outputPath!);
+    expect(Math.abs(Number(out.format.duration) - 10)).toBeLessThan(0.15);
+
+    const kit = await call<import('../src/shared/contracts').YouTubeKit>('youtubeKit', { jobId: job.id });
+    expect(kit.isShort).toBe(true);
+    expect([kit.width, kit.height]).toEqual([720, 1280]);
+    expect(Math.abs(kit.loudnessLufs! - -14)).toBeLessThan(1.5);
+    expect(kit.checks.find((c) => c.id === 'loudness')!.status).toBe('pass');
+    expect(kit.checks.find((c) => c.id === 'length')!.status).toBe('pass');
+    expect(kit.checks.find((c) => c.id === 'resolution')!.status).toBe('warn'); // 720p: suggests 1080p
+    expect(kit.title).toBe('Clutch moment #Shorts');
+    expect(kit.chapters).toEqual([]);
+    expect(kit.frames.length).toBeGreaterThanOrEqual(2);
+
+    // Thumbnail: only a 1280×720 JPEG is accepted; it is written next to the video and revealed.
+    const jpg = execFileSync('ffmpeg', ['-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=purple:s=1280x720', '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'mjpeg', 'pipe:1']);
+    const saved = await call<{ fileName: string }>('saveThumbnail', { jobId: job.id, dataUrl: 'data:image/jpeg;base64,' + jpg.toString('base64') });
+    expect(saved.fileName).toBe('Clutch moment thumbnail.jpg');
+    expect(fs.existsSync(path.join(path.dirname(done.outputPath!), saved.fileName))).toBe(true);
+    expect(platform.revealed.at(-1)).toBe(path.join(path.dirname(done.outputPath!), saved.fileName));
+    const small = kit.frames[0]!.replace(/^data:image\/jpeg;base64,/, '');
+    expect(Buffer.from(small, 'base64').length).toBeGreaterThan(1000);
+    const wrong = execFileSync('ffmpeg', ['-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=red:s=640x360', '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'mjpeg', 'pipe:1']);
+    await expect(call('saveThumbnail', { jobId: job.id, dataUrl: 'data:image/jpeg;base64,' + wrong.toString('base64') })).rejects.toThrow(/1280×720/);
+    await expect(call('saveThumbnail', { jobId: job.id, dataUrl: 'data:image/png;base64,AAAA' })).rejects.toThrow(/JPEG/);
+
+    await call('revealOutput', { id: job.id });
+    expect(platform.revealed.at(-1)).toBe(done.outputPath);
+    // No browser hook in this bridge: reported as unavailable, never silently ignored.
+    await expect(call('openYouTubeStudio')).rejects.toThrow(/not available/);
+  });
+
+  it('voice "Mark that" adds a timestamped marker to the active session', async () => {
+    await bridge.voiceHeard('mark that', 0.9);
+    expect(core.recentNotices()[0]!.message).toMatch(/Start a session first/);
+
+    await call('setObsPassword', { password: 'hunter2' });
+    await call('connect', { host: '127.0.0.1', port: obs.port });
+    await call('saveProfile', { id: 'x', name: 'Night', game: 'Halo', gamePath: 'steam://rungameid/1', scene: 'Gameplay', destination: dir, replayDurationMs: 30000, audioPreset: 'Balanced', companionApps: [], hotkey: '' });
+    const session = await call<{ id: string }>('startSession', { profileId: 'setup' });
+    await new Promise((r) => setTimeout(r, 4100)); // past the one-action-per-utterance cooldown
+    await bridge.voiceHeard('mark that', 0.9);
+    const s = await state();
+    const events = s.sessions.find((x) => x.id === session.id)!.events.map((e) => e.message);
+    expect(events.some((m) => /^Marker · 0:00:0\d into the session \(voice\)$/.test(m))).toBe(true);
+    expect(s.voice?.lastCommand).toBe('mark');
+    await call('endSession');
+  });
 });

@@ -137,6 +137,8 @@ export interface ExportPreset {
     fps: 30 | 60;
     quality: 'balanced' | 'high';
     codec: 'h264' | 'hevc';
+    /** Normalise loudness to YouTube's ~−14 LUFS playback level. Optional so older presets stay valid. */
+    loudness?: boolean;
 }
 export interface Job {
     id: string;
@@ -184,6 +186,8 @@ export interface StudioSnapshot {
         detail: string | null;
         device: string | null;
         lastHeardAt: string | null;
+        /** Which command was heard last (optional for older desktop builds). */
+        lastCommand?: 'clip' | 'mark' | null;
     };
 }
 export interface OperationMap {
@@ -365,9 +369,76 @@ export interface OperationMap {
         };
         output: void;
     };
+    /** Desktop only: loudest passages of a clip (FFmpeg EBU R128 analysis), loudest first. */
+    suggestMoments: {
+        input: {
+            clipId: string;
+        };
+        output: Moment[];
+    };
+    /** Desktop only: probes and measures a finished export, then drafts YouTube metadata. Nothing is uploaded. */
+    youtubeKit: {
+        input: {
+            jobId: string;
+        };
+        output: YouTubeKit;
+    };
+    /** Desktop only: saves a 1280×720 JPEG thumbnail (≤ 2 MB) next to the export and shows it in the folder. */
+    saveThumbnail: {
+        input: {
+            jobId: string;
+            dataUrl: string;
+        };
+        output: {
+            fileName: string;
+        };
+    };
+    /** Desktop only: shows the exported file in its folder. */
+    revealOutput: {
+        input: {
+            id: string;
+        };
+        output: void;
+    };
+    /** Desktop only: opens YouTube Studio (fixed https URL) in the default browser. */
+    openYouTubeStudio: {
+        input: undefined;
+        output: void;
+    };
+}
+export interface Moment {
+    atMs: number;
+    /** Loudness above the clip's typical level, in LU. */
+    excessLu: number;
+}
+export interface YouTubeCheck {
+    id: string;
+    label: string;
+    status: 'pass' | 'warn' | 'fail';
+    detail: string;
+}
+export interface YouTubeKit {
+    jobId: string;
+    fileName: string;
+    durationMs: number;
+    width: number;
+    height: number;
+    isShort: boolean;
+    loudnessLufs: number | null;
+    checks: YouTubeCheck[];
+    chapters: {
+        atMs: number;
+        title: string;
+    }[];
+    chapterNote: string | null;
+    title: string;
+    description: string;
+    tags: string[];
+    /** Candidate thumbnail frames: 1280×720 JPEG data URLs taken from the export. */
+    frames: string[];
 }
 /** Operations only the desktop bridge implements; DemoAdapter rejects them. */
-export const DESKTOP_ONLY_OPERATIONS: Operation[] = ['importNative', 'relinkNative', 'pickMusic', 'setObsPassword'];
+export const DESKTOP_ONLY_OPERATIONS: Operation[] = ['importNative', 'relinkNative', 'pickMusic', 'setObsPassword', 'suggestMoments', 'youtubeKit', 'saveThumbnail', 'revealOutput', 'openYouTubeStudio'];
 export type Operation = keyof OperationMap;
 export interface StudioService {
     readonly mode: 'demo' | 'desktop';

@@ -162,7 +162,9 @@ export function buildExportCommand(
   if (vfo > 0) post.push(`fade=t=out:st=${sec(total - vfo)}:d=${sec(vfo)}`);
   graph.push(`[vcat]${post.length ? post.join(',') : 'null'}[vout]`);
 
-  // ---- post audio: original gain + optional music
+  // ---- post audio: original gain + optional music, then optional loudness normalisation
+  const level = settings.loudnessLufs ?? null;
+  const aout = level === null ? '[aout]' : '[apre]';
   const orig = project.originalAudioGainDb !== 0 ? `volume=${project.originalAudioGainDb}dB` : 'anull';
   if (project.music) {
     const mu = project.music;
@@ -177,12 +179,16 @@ export function buildExportCommand(
       if (mu.fadeOutMs > 0) mf.push(`afade=t=out:st=${sec(Math.max(0, len - mu.fadeOutMs))}:d=${sec(Math.min(mu.fadeOutMs, len))}`);
       if (start > 0) mf.push(`adelay=${start}|${start}`);
       graph.push(`[${mi}:a:0]${mf.join(',')}[mus]`);
-      graph.push(`[aorig][mus]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,atrim=duration=${sec(total)}[aout]`);
+      graph.push(`[aorig][mus]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,atrim=duration=${sec(total)}${aout}`);
     } else {
-      graph.push(`[acat]${orig}[aout]`);
+      graph.push(`[acat]${orig}${aout}`);
     }
   } else {
-    graph.push(`[acat]${orig}[aout]`);
+    graph.push(`[acat]${orig}${aout}`);
+  }
+  if (level !== null) {
+    // Single-pass loudnorm to the target with a -1.5 dBTP ceiling; it resamples internally, so return to 48 kHz.
+    graph.push(`[apre]loudnorm=I=${level}:TP=-1.5:LRA=11,aresample=48000,atrim=duration=${sec(total)}[aout]`);
   }
 
   const args = [

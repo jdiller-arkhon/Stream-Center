@@ -159,7 +159,7 @@ try {
     const before = await page.locator('.highlight-card').count();
     await nav('Settings');
     await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
-    await page.getByLabel('Voice command: say “Clip that” to save a replay').check();
+    await page.getByLabel('Voice commands: say “Clip that” to save a replay, “Mark that” to mark the moment').check();
     await page.getByRole('button', { name: 'Save settings', exact: true }).click();
     await page.locator('.voice-status.listening').waitFor({ timeout: 30000 });
     check('voice command starts listening offline (status shows “Say Clip that”)', (await page.locator('.voice-status').innerText()).includes('Clip that'));
@@ -169,7 +169,7 @@ try {
     check('saying “Clip that” saves a replay into the library', after > before, `${before} → ${after} highlights; OBS saves: ${obs.requests.filter((r) => r.type === 'SaveReplayBuffer').length}`);
     await nav('Settings');
     await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
-    await page.getByLabel('Voice command: say “Clip that” to save a replay').uncheck();
+    await page.getByLabel('Voice commands: say “Clip that” to save a replay, “Mark that” to mark the moment').uncheck();
     await page.getByRole('button', { name: 'Save settings', exact: true }).click();
     await page.locator('.voice-status').waitFor({ state: 'detached', timeout: 10000 });
     check('turning the voice command off stops listening', (await page.locator('.voice-status').count()) === 0);
@@ -216,9 +216,44 @@ try {
     check('exported file is the 3.5 s trim, 1080p60 H.264 with audio', Math.abs(Number(p.format.duration) - 3.5) < 0.12 && v?.height === 1080 && v?.codec_name === 'h264' && !!a, `${Number(p.format.duration).toFixed(3)}s ${v?.width}x${v?.height} ${v?.codec_name}/${a?.codec_name}`);
     check('exported audio and video lengths match (A/V sync)', Math.abs(Number(v.duration) - Number(a.duration)) < 0.1, `v ${v.duration} a ${a.duration}`);
   }
-  await page.getByRole('button', { name: /^Open Output/ }).first().click();
+  await page.getByRole('button', { name: 'Open video', exact: true }).first().click();
   await until(() => fs.existsSync(openLog), 5000, 'open output').catch(() => {});
   check('Open Output opens the exported file', fs.existsSync(openLog) && fs.readFileSync(openLog, 'utf8').includes(exportDir));
+  await page.getByRole('button', { name: 'Close dialog' }).click();
+
+  // ---- YouTube: Make a Short → Shorts preset with loudness normalisation → YouTube kit
+  await page.getByRole('button', { name: 'Make a Short', exact: true }).click();
+  await page.locator('.preview-heading span', { hasText: '9:16 · Vertical Short' }).waitFor({ timeout: 30000 });
+  check('Make a Short reframes the draft to 9:16 around the loudest moment', true);
+  await page.getByText('Saved locally', { exact: true }).waitFor({ timeout: 10000 }).catch(() => {});
+  await page.getByRole('button', { name: 'Export clip', exact: true }).click();
+  await page.getByRole('button', { name: 'Shorts preset · 1080×1920', exact: true }).click();
+  check('Shorts preset turns on −14 LUFS loudness normalisation', await page.getByLabel('Normalize loudness to −14 LUFS (YouTube\'s playback level)').isChecked());
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  const shortCard = page.locator('.job-card').filter({ hasText: '(Short)' });
+  await shortCard.getByText('Completed', { exact: true }).waitFor({ timeout: 90000 });
+  const shortFile = fs.readdirSync(exportDir).find((f) => f.endsWith('(Short).mp4'));
+  if (shortFile) {
+    const p = probe(path.join(exportDir, shortFile));
+    const v = p.streams.find((s) => s.codec_type === 'video');
+    check('Short exports as 1080×1920 vertical video', v?.width === 1080 && v?.height === 1920, `${shortFile} ${v?.width}x${v?.height}`);
+  } else check('Short exports as 1080×1920 vertical video', false, fs.readdirSync(exportDir).join(', '));
+  await shortCard.getByRole('button', { name: 'YouTube kit', exact: true }).click();
+  await page.locator('.yt-check').first().waitFor({ timeout: 60000 });
+  const checksText = await page.locator('.yt-checks').innerText();
+  check('YouTube kit checks the real file (Shorts length, resolution, loudness)', /Shorts length/.test(checksText) && /1080×1920/.test(checksText) && /LUFS/.test(checksText), checksText.replace(/\s+/g, ' ').slice(0, 160));
+  check('normalised Short measures close to −14 LUFS', (await page.locator('.yt-check', { hasText: 'Loudness' }).getAttribute('class'))?.includes('pass'), await page.locator('.yt-check', { hasText: 'Loudness' }).innerText());
+  check('YouTube kit drafts a #Shorts title', (await page.getByLabel('Video title').inputValue()).includes('#Shorts'), await page.getByLabel('Video title').inputValue());
+  await page.getByLabel('Thumbnail text').fill('Clutch moment');
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(shots, 'desktop-youtube-kit.png') });
+  await page.getByRole('button', { name: 'Save thumbnail (1280×720)', exact: true }).click();
+  const thumb = await until(() => fs.readdirSync(exportDir).find((f) => f.endsWith('thumbnail.jpg')), 10000, 'thumbnail').catch(() => null);
+  const tp = thumb ? probe(path.join(exportDir, thumb)).streams[0] : null;
+  check('thumbnail is saved next to the video as a 1280×720 JPEG under 2 MB', !!thumb && tp?.width === 1280 && tp?.height === 720 && fs.statSync(path.join(exportDir, thumb)).size < 2 * 1024 * 1024, `${thumb} ${tp?.width}x${tp?.height}`);
+  await page.getByRole('button', { name: 'Open YouTube Studio', exact: true }).click();
+  await until(() => fs.readFileSync(openLog, 'utf8').includes('https://studio.youtube.com/'), 5000, 'studio').catch(() => {});
+  check('Open YouTube Studio opens the fixed Studio URL (no sign-in or upload by the app)', fs.readFileSync(openLog, 'utf8').includes('https://studio.youtube.com/'));
   await page.getByRole('button', { name: 'Close dialog' }).click();
 
   // ---- Import media (native picker) + relink
