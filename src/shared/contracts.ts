@@ -433,6 +433,13 @@ export interface OperationMap {
             /** 0.1–1: how far the result may move from the starting image. */
             strength: number;
             count: number;
+            /** Style preset key (see THUMB_STYLE_OPTIONS) or 'none'. Optional so older callers stay valid. */
+            style?: string;
+            /** Extra things to keep out of the image. */
+            avoid?: string;
+            quality?: 'fast' | 'balanced' | 'best';
+            /** Reuse a seed (e.g. "More like this"); omitted = random. */
+            seed?: number | null;
         };
         output: {
             images: string[];
@@ -447,6 +454,12 @@ export interface OperationMap {
     };
 }
 export type ThumbAiEngine = 'off' | 'sdcpp' | 'webui';
+/** Style presets the desktop generator understands (labels for the UI; prompts live in the service). */
+export const THUMB_STYLE_OPTIONS: { key: string; label: string }[] = [
+    { key: 'none', label: 'No style' }, { key: 'cinematic', label: 'Cinematic' }, { key: 'neon', label: 'Neon' }, { key: 'anime', label: 'Anime' },
+    { key: 'comic', label: 'Comic' }, { key: 'photo', label: 'Photoreal' }, { key: 'fantasy', label: 'Fantasy' }, { key: 'horror', label: 'Horror' },
+    { key: 'minimal', label: 'Minimal' }, { key: '3d', label: '3D render' },
+];
 export interface ThumbAiStatus {
     engine: ThumbAiEngine;
     /** File names only (the full paths stay in the desktop service). */
@@ -476,6 +489,8 @@ export interface YouTubeKit {
     width: number;
     height: number;
     isShort: boolean;
+    /** Game title from the clips or the game setup, when known. */
+    game?: string | null;
     loudnessLufs: number | null;
     checks: YouTubeCheck[];
     chapters: {

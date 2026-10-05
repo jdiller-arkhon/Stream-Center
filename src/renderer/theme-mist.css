@@ -1964,7 +1964,8 @@ h3 {
 }
 .yt-layer {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 96px minmax(80px, 140px) 32px;
+  grid-template-columns: 40px minmax(0, 1fr) minmax(70px, 120px) auto auto 32px;
+  cursor: pointer;
   align-items: center;
   gap: 10px;
   padding: 6px 8px;
@@ -2016,4 +2017,108 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- Thumbnail studio */
+.yt-thumb canvas.draggable {
+  cursor: grab;
+  touch-action: none;
+}
+.yt-thumb canvas.draggable:active {
+  cursor: grabbing;
+}
+.yt-size-previews {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  margin: 12px 0 4px;
+}
+.yt-size-previews figure {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+.yt-size-previews canvas {
+  display: block;
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+}
+.yt-size-previews figcaption {
+  color: var(--muted);
+  font-size: 11px;
+}
+.yt-size-previews .fine-print {
+  flex: 1 1 180px;
+  margin: 0;
+}
+.yt-prompt-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.yt-prompt-tools select {
+  flex: 1 1 200px;
+  width: auto;
+}
+.yt-style-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.yt-style-chips .chip {
+  padding: 5px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--label);
+  font-size: 12px;
+  font-weight: 600;
+}
+.yt-style-chips .chip.selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.yt-layer.active {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+}
+.yt-layer .compact-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.yt-layer-tools {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+}
+.yt-layer-tools > span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.yt-cutout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+.yt-cutout > :first-child {
+  flex: 1 1 220px;
+}
+@media (max-width: 640px) {
+  .yt-layer {
+    grid-template-columns: 40px minmax(0, 1fr) 32px;
+  }
+  .yt-layer input[type='range'],
+  .yt-layer .compact-toggle {
+    grid-column: 1 / -1;
+  }
 }

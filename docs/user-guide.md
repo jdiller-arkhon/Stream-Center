@@ -30,6 +30,14 @@ Turn on in **Settings → Shortcuts**. Everything runs offline on your PC; no au
   - It drafts a title, description (with chapters when your cut has three or more parts of at least 10 seconds) and tags. Edit them and copy them.
   - It builds a 1280×720 thumbnail from a frame of your video with your text, saved next to the video.
   - **Describe a background** creates thumbnail art from your words with AI running on your own GPU (nothing is uploaded). You can start from a video frame or an image you upload, and add your own images on top (a cut-out of you, a logo). Drift Studio adds the title text, because AI models draw text badly.
+  - **Thumbnail studio extras:**
+    - style presets (Cinematic, Neon, Anime, Comic and more), an *Avoid* field, Fast/Balanced/Best quality;
+    - **More like this** variations of an AI image;
+    - **Suggest from my video** fills in a description;
+    - recent descriptions.
+    - Images on top can be dragged on the preview, outlined, shadowed, brought to front, and have a plain or green-screen background removed (and restored).
+    - Text: font, colour, placement (left, right, top, bottom) and capitals.
+    - Small previews show how the thumbnail looks on the YouTube home feed and in search.
   - **Open YouTube Studio** opens YouTube in your browser. Choose Create → Upload videos and drag in the file (**Show video in folder** finds it). Drift Studio never signs in or uploads for you.
 
 ### Setting up the AI thumbnail generator

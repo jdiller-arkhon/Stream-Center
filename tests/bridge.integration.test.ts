@@ -445,6 +445,14 @@ describe('StudioBridge (renderer protocol v1 over desktop services)', () => {
       const start = 'data:image/png;base64,' + pngOf(1280, 720).toString('base64');
       await call<Gen>('generateThumbnail', { description: 'same, but at dawn', initImage: start, strength: 0.4, count: 1 });
       expect(ui.requests.at(-1)!.path).toBe('/sdapi/v1/img2img');
+      // Style, things to avoid, quality and a fixed seed ("More like this") reach the engine.
+      const v = await call<Gen>('generateThumbnail', { description: 'rooftop duel', initImage: null, strength: 0.6, count: 1, style: 'neon', avoid: 'people', quality: 'best', seed: 4242 });
+      expect(v.seed).toBe(4242);
+      const body = ui.requests.at(-1)!.body;
+      expect(String(body.prompt)).toMatch(/^rooftop duel, synthwave/);
+      expect(String(body.negative_prompt)).toMatch(/people$/);
+      expect(body).toMatchObject({ seed: 4242, steps: 6 });
+      await expect(call('generateThumbnail', { description: 'x', initImage: null, strength: 0.6, count: 1, style: 'vaporwave' })).rejects.toThrow(/style/);
     } finally {
       await ui.close();
     }

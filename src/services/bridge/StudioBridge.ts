@@ -947,6 +947,7 @@ export class StudioBridge {
       width: probe.video?.width ?? 0,
       height: probe.video?.height ?? 0,
       isShort: short,
+      game: game && game !== GAME_PLACEHOLDER ? game : null,
       loudnessLufs: loud.integratedLufs,
       checks,
       chapters,
@@ -1032,9 +1033,9 @@ export class StudioBridge {
     this.generation = ctrl;
     this.schedule();
     const started = Date.now();
-    const seed = Math.floor(Math.random() * 2 ** 31);
+    const seed = input.seed ?? Math.floor(Math.random() * 2 ** 31);
     try {
-      const r = await engine.generate({ description: input.description, init, strength: input.strength, count: input.count, seed }, ctrl.signal);
+      const r = await engine.generate({ description: input.description, init, strength: input.strength, count: input.count, seed, style: input.style, avoid: input.avoid, quality: input.quality }, ctrl.signal);
       return { images: r.images.map((b) => 'data:image/png;base64,' + b.toString('base64')), engine: engine.label, seed, ms: Date.now() - started };
     } finally {
       this.generation = null;

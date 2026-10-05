@@ -30,7 +30,7 @@ function job(value: unknown) { const j = obj(value); for (const k of ['id', 'pro
     str(j[k], k); one(j.status, ['accepted', 'processing', 'completed', 'failed', 'canceled'], 'job status'); number(j.progress, 0, 100, 'progress'); bool(j.simulated, 'simulated'); nullable(j.outputHandle, x => str(x, 'output')); nullable(j.error, x => { const e = obj(x); str(e.code, 'error code'); str(e.message, 'error'); bool(e.recoverable, 'recoverable'); nullable(e.details, v => str(v, 'details')); }); }
 function youtubeKit(value: unknown) { const k = obj(value); id(k.jobId); for (const f of ['fileName', 'title', 'description'])
     str(k[f], f, 20000); for (const f of ['durationMs', 'width', 'height'])
-    number(k[f], 0, 86400000, f); bool(k.isShort, 'short'); nullable(k.loudnessLufs, x => number(x, -200, 50, 'loudness')); nullable(k.chapterNote, x => str(x, 'chapter note')); list(k.tags, 'tags').forEach(x => str(x, 'tag'));
+    number(k[f], 0, 86400000, f); bool(k.isShort, 'short'); if (k.game !== undefined) nullable(k.game, x => str(x, 'game')); nullable(k.loudnessLufs, x => number(x, -200, 50, 'loudness')); nullable(k.chapterNote, x => str(x, 'chapter note')); list(k.tags, 'tags').forEach(x => str(x, 'tag'));
     list(k.checks, 'checks').forEach(c => { const v = obj(c); str(v.id, 'check'); str(v.label, 'check'); str(v.detail, 'check'); one(v.status, ['pass', 'warn', 'fail'], 'check status'); });
     list(k.chapters, 'chapters').forEach(c => { const v = obj(c); number(v.atMs, 0, 86400000, 'chapter'); str(v.title, 'chapter'); });
     list(k.frames, 'frames').forEach(f => { if (!str(f, 'frame', 3_000_000).startsWith('data:image/jpeg;base64,')) invalid('Invalid frame'); }); }
@@ -135,6 +135,14 @@ export function validateRequest(op: Operation, input: unknown): void {
                 invalid('The starting image must be a PNG or JPEG'); });
             number(p.strength, 0.1, 1, 'strength');
             one(p.count, [1, 2, 3, 4], 'image count');
+            if (p.style !== undefined)
+                one(p.style, ['none', 'cinematic', 'neon', 'anime', 'comic', 'photo', 'fantasy', 'horror', 'minimal', '3d'], 'style');
+            if (p.avoid !== undefined)
+                str(p.avoid, 'avoid', 300);
+            if (p.quality !== undefined)
+                one(p.quality, ['fast', 'balanced', 'best'], 'quality');
+            if (p.seed !== undefined)
+                nullable(p.seed, x => { number(x, 0, 2 ** 31 - 1, 'seed'); if (!Number.isInteger(x)) invalid('Seed must be a whole number'); });
             break;
         case 'revealOutput':
         case 'relinkNative':

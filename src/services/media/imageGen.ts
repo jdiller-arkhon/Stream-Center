@@ -21,7 +21,27 @@ export interface GenRequest {
   strength: number;
   count: number;
   seed: number;
+  /** One of THUMB_STYLES (keys), or 'none'. */
+  style?: string;
+  /** Extra things to keep out of the image. */
+  avoid?: string;
+  quality?: GenQuality;
 }
+
+export type GenQuality = 'fast' | 'balanced' | 'best';
+
+/** Style presets: prompt fragments that steer the look without the user writing them. */
+export const THUMB_STYLES: Record<string, { label: string; prompt: string; negative?: string }> = {
+  cinematic: { label: 'Cinematic', prompt: 'cinematic film still, dramatic rim lighting, volumetric light, shallow depth of field, color graded' },
+  neon: { label: 'Neon', prompt: 'synthwave, neon glow, magenta and cyan lighting, night, reflections, retro futuristic' },
+  anime: { label: 'Anime', prompt: 'anime key visual, cel shading, vivid colors, clean line art, studio quality', negative: 'photo, photorealistic' },
+  comic: { label: 'Comic', prompt: 'comic book art, bold ink outlines, halftone shading, dynamic action, pop art colors', negative: 'photo, photorealistic' },
+  photo: { label: 'Photoreal', prompt: 'photorealistic, 35mm photo, natural lighting, ultra detailed, high dynamic range', negative: 'cartoon, illustration, painting' },
+  fantasy: { label: 'Fantasy', prompt: 'epic fantasy concept art, magical atmosphere, glowing particles, painterly, grand scale' },
+  horror: { label: 'Horror', prompt: 'dark horror atmosphere, eerie fog, low key lighting, ominous, desaturated with red accents' },
+  minimal: { label: 'Minimal', prompt: 'minimalist flat illustration, simple shapes, clean gradient background, lots of empty space', negative: 'cluttered, busy, detailed background' },
+  '3d': { label: '3D render', prompt: '3d render, octane render, soft studio lighting, glossy materials, stylized' },
+};
 
 export interface GenResult {
   /** PNG images. */
@@ -38,20 +58,28 @@ export interface ImageEngine {
 const STYLE = 'youtube thumbnail background, bold composition, vibrant colors, high contrast, dramatic lighting, sharp focus, highly detailed';
 const NEGATIVE = 'text, letters, words, caption, watermark, logo, signature, blurry, lowres, jpeg artifacts, deformed, extra fingers, bad anatomy';
 
-export function buildPrompt(description: string): { prompt: string; negative: string } {
-  const d = description.replace(/\s+/g, ' ').trim().slice(0, 600);
+const clean = (s: string | undefined, max: number) => (s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+export function buildPrompt(description: string, style = 'none', avoid = ''): { prompt: string; negative: string } {
+  const d = clean(description, 600);
   if (!d) fail('VALIDATION', 'Describe the thumbnail you want');
-  return { prompt: `${d}, ${STYLE}`, negative: NEGATIVE };
+  const st = THUMB_STYLES[style];
+  const extra = clean(avoid, 300);
+  return {
+    prompt: [d, st?.prompt, STYLE].filter(Boolean).join(', '),
+    negative: [NEGATIVE, st?.negative, extra].filter(Boolean).join(', '),
+  };
 }
 
 /** Few-step distilled models (Turbo, Lightning, LCM, Hyper, Schnell) need very different settings. */
-export function profileFor(modelName: string): { steps: number; cfg: number; width: number; height: number } {
+export function profileFor(modelName: string, quality: GenQuality = 'balanced'): { steps: number; cfg: number; width: number; height: number } {
   const n = modelName.toLowerCase();
   const fast = /turbo|lightning|lcm|hyper|schnell/.test(n);
   const xl = /xl|sd3|flux|pony|illustrious/.test(n);
   // 16:9-ish sizes in multiples of 64 near each family's native resolution; the app crops to 1280×720.
   const [width, height] = xl ? [1344, 768] : [768, 448];
-  return fast ? { steps: 4, cfg: 1, width, height } : { steps: 24, cfg: 6.5, width, height };
+  const steps = fast ? { fast: 2, balanced: 4, best: 6 }[quality] : { fast: 14, balanced: 24, best: 36 }[quality];
+  return { steps, cfg: fast ? 1 : 6.5, width, height };
 }
 
 /** Only loopback WebUI servers are accepted, so "local" stays true. */
@@ -109,8 +137,8 @@ export class SdCppEngine implements ImageEngine {
   async generate(req: GenRequest, signal: AbortSignal): Promise<GenResult> {
     const problem = SdCppEngine.problem(this.exe, this.model);
     if (problem) fail('VALIDATION', problem);
-    const { prompt, negative } = buildPrompt(req.description);
-    const prof = profileFor(path.basename(this.model));
+    const { prompt, negative } = buildPrompt(req.description, req.style, req.avoid);
+    const prof = profileFor(path.basename(this.model), req.quality);
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-gen-'));
     try {
       const base = ['-m', this.model, '-p', prompt, '-n', negative, '-W', String(prof.width), '-H', String(prof.height), '--steps', String(prof.steps), '--cfg-scale', String(prof.cfg)];
@@ -172,8 +200,8 @@ export class WebUiEngine implements ImageEngine {
   async generate(req: GenRequest, signal: AbortSignal): Promise<GenResult> {
     const status = await this.check();
     if (!status.ok) fail('VALIDATION', status.reason);
-    const { prompt, negative } = buildPrompt(req.description);
-    const prof = profileFor(status.model);
+    const { prompt, negative } = buildPrompt(req.description, req.style, req.avoid);
+    const prof = profileFor(status.model, req.quality);
     const body: Record<string, unknown> = {
       prompt,
       negative_prompt: negative,
