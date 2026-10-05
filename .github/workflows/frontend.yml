@@ -8,8 +8,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  renderer:
-    name: Renderer (contracts + browser demo)
+  # One job on purpose: this account gets very few concurrent runners, and a second
+  # job queued behind another run was cancelled by GitHub after 15 minutes waiting.
+  ci:
+    name: Build, tests and Electron end-to-end
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -20,35 +22,12 @@ jobs:
           cache: npm
       - name: Validate dependency lockfile
         run: node scripts/check-lockfile.mjs
-      - run: npm ci
-      - name: Install FFmpeg (browser test generates a synthetic video)
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: npm run build
-      - run: npm run test:renderer
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:browser
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: frontend-screenshots
-          path: |
-            docs/screenshots/*.png
-            docs/browser-verification.json
-
-  desktop:
-    name: Desktop services + Electron end-to-end
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
       - name: System tools (FFmpeg, virtual display, TTS voice for the "Clip that" test)
         run: sudo apt-get update && sudo apt-get install -y ffmpeg xvfb flite
       - run: npm ci
       - run: npm run typecheck
+      - name: Renderer contract tests
+        run: npm run test:renderer
       - name: Service tests (fake OBS server + real FFmpeg)
         run: npm run test:services
       - name: Build renderer and desktop bundles
@@ -59,9 +38,15 @@ jobs:
         env:
           DRIFT_E2E_SCREENSHOTS: e2e-screenshots
         run: xvfb-run -a node tests/electron-e2e/run.mjs
+      - run: npx playwright install --with-deps chromium
+      - name: Browser demo (layouts, focus, keyboard, dialogs)
+        run: npm run test:browser
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: desktop-e2e-screenshots
-          path: e2e-screenshots/*.png
+          name: screenshots
+          path: |
+            e2e-screenshots/*.png
+            docs/screenshots/*.png
+            docs/browser-verification.json
           if-no-files-found: ignore
