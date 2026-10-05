@@ -9,6 +9,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Validate dependency lockfile
+        run: node scripts/check-lockfile.mjs
       - run: npm ci
       - run: npm run build
       - run: npm test
