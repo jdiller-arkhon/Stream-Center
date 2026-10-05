@@ -1,0 +1,76 @@
+{
+  "name": "drift-studio",
+  "productName": "Drift Studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Drift Studio — personal gaming session, OBS control and clip editing workstation.",
+  "main": "dist/main/main.cjs",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "obs-websocket-js": "^5.0.8",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/ws": "^8.18.2",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3",
+    "ws": "^8.22.0"
+  },
+  "scripts": {
+    "build:desktop": "node scripts/build-desktop.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "start": "npm run build:desktop && electron .",
+    "start:safe": "npm run build:desktop && electron . --safe-mode",
+    "smoke:electron": "npm run build:desktop && node tests/electron-smoke/run.mjs",
+    "dist:win": "npm run build:desktop && electron-builder --win nsis --x64"
+  },
+  "build": {
+    "appId": "studio.drift.desktop",
+    "productName": "Drift Studio",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/ffmpeg",
+        "to": "ffmpeg",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "DriftStudio-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false
+    },
+    "npmRebuild": false
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}
