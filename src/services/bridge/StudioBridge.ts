@@ -44,6 +44,9 @@ const KV_MUSIC = 'ui.music';
 const UNCONFIGURED = 'unconfigured';
 const MIC_ID = 'microphone';
 const URI_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
+const MEDIA_EXT = /\.(mp4|mkv|mov|webm|flv|ts|m4v|avi)$/i;
+/** Placeholder text the renderer's setup form uses before a game is named. */
+const GAME_PLACEHOLDER = 'Choose a game';
 
 export class BridgeError extends Error {
   constructor(readonly error: StructuredError) {
@@ -587,7 +590,7 @@ export class StudioBridge {
             projectId: converted.id,
             settings: exportSettings(preset),
             destinationDirectory: this.resolveExportDir(preset.destination),
-            fileName: sanitizeFileStem(project.name),
+            fileName: sanitizeFileStem(project.name.replace(MEDIA_EXT, '') || 'Clip'),
           }),
         );
         return this.mapJob(job);
@@ -625,7 +628,7 @@ export class StudioBridge {
     return {
       id: p.id,
       name: p.name.trim().slice(0, 80),
-      gameTitle: p.game.slice(0, 120),
+      gameTitle: (p.game.trim() && p.game !== GAME_PLACEHOLDER ? p.game : isUri ? '' : path.basename(gamePath).replace(/\.(exe|lnk)$/i, '')).slice(0, 120),
       game: isUri ? { kind: 'uri', uri: gamePath, processName: null } : { kind: 'executable', path: gamePath, args: [], processName: null },
       artworkPath: null,
       obs: { sceneName: p.scene.trim() || null, startReplayBuffer: true, startRecording: false },

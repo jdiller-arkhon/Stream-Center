@@ -20,8 +20,8 @@
     "desktop:build": "node scripts/build-desktop.mjs",
     "desktop:start": "npm run build && node scripts/build-desktop.mjs && electron .",
     "desktop:safe": "npm run build && node scripts/build-desktop.mjs && electron . --safe-mode",
-    "smoke:electron": "npm run build && node scripts/build-desktop.mjs && node tests/electron-smoke/run.mjs",
-    "desktop:package": "npm run build && node scripts/build-desktop.mjs && electron-builder --win nsis --x64"
+    "desktop:package": "npm run build && node scripts/build-desktop.mjs && electron-builder --win nsis --x64",
+    "test:e2e": "npm run build && node scripts/build-desktop.mjs && node tests/electron-e2e/run.mjs"
   },
   "engines": {
     "node": ">=22.13"

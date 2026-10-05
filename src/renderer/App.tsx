@@ -20,6 +20,8 @@ export function App() {
     const [setup, setSetup] = useState(false);
     const [folder, setFolder] = useState(s.settings.mediaFolder);
     const [gamePath, setGamePath] = useState(s.profiles[0]?.gamePath??'');
+    // Refresh the setup form from current state each time it opens (values may have changed in Settings/Profiles).
+    useEffect(() => { if (setup) { setFolder(s.settings.mediaFolder); setGamePath(profile.gamePath); } }, [setup]); // eslint-disable-line react-hooks/exhaustive-deps
     const [mic, setMic] = useState(false);
     const [mobileNav, setMobileNav] = useState(false);
     const [clock, setClock] = useState(Date.now());
