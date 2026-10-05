@@ -123,6 +123,23 @@ describe('media pipeline (real ffmpeg)', () => {
     expect(p.streams.some((s) => s.codec_type === 'audio')).toBe(true);
   });
 
+  it('vertical export without a manual crop center-crops to fill 9:16', async () => {
+    const src = generateClip(path.join(dir, 'in', 'wide.mp4'), 3, { size: '1280x720' });
+    const [r] = ok(await core.invoke('clips.import', { paths: [src] }));
+    const project = ok(await core.invoke('projects.createFromClip', { clipId: r!.clipId!, name: 'Wide' }));
+    const job = ok(await core.invoke('exports.enqueue', { projectId: project.id, settings: settings({ aspect: '9:16', width: 360, height: 640 }), destinationDirectory: null, fileName: 'tall' }));
+    const done = await finished(core, job.id);
+    expect(done.state, JSON.stringify(done.error)).toBe('succeeded');
+    const v = probe(done.outputPath!).streams.find((s) => s.codec_type === 'video')!;
+    expect([v.width, v.height]).toEqual([360, 640]);
+  });
+
+  it('rejects tool paths that are not ffmpeg/ffprobe binaries', async () => {
+    const r = await core.invoke('settings.update', { tools: { ffmpegPath: process.platform === 'win32' ? 'C:\\Windows\\System32\\cmd.exe' : '/bin/sh' } });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe('VALIDATION');
+  });
+
   it('cancels a running export and cleans up partial output', async () => {
     const src = generateClip(path.join(dir, 'in', 'long.mp4'), 30, { size: '1280x720' });
     const [r] = ok(await core.invoke('clips.import', { paths: [src] }));

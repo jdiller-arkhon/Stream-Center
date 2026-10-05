@@ -6,19 +6,19 @@
   "description": "Drift Studio — personal gaming session, OBS control and clip editing workstation.",
   "main": "dist/main/main.cjs",
   "license": "UNLICENSED",
-  "dependencies": {
-    "obs-websocket-js": "^5.0.8",
-    "zod": "^4.6.5"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.20.5",
     "@types/ws": "^8.18.2",
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
+    "obs-websocket-js": "^5.0.8",
+    "playwright-core": "^1.63.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3",
-    "ws": "^8.22.0"
+    "ws": "^8.22.0",
+    "zod": "^4.6.5"
   },
   "scripts": {
     "build:desktop": "node scripts/build-desktop.mjs",

@@ -19,7 +19,7 @@ const DEV_URL = process.env.DRIFT_RENDERER_URL; // e.g. http://localhost:5173 (V
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'drift-app', privileges: { standard: true, secure: true, supportFetchAPI: true } },
-  { scheme: 'drift-media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  { scheme: 'drift-media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
 ]);
 
 if (process.env.DRIFT_USER_DATA) app.setPath('userData', process.env.DRIFT_USER_DATA);
@@ -182,10 +182,13 @@ function registerProtocols(): void {
     const id = decodeURIComponent(url.pathname.replace(/^\//, ''));
     if (!core || !['clip', 'proxy', 'thumb'].includes(kind) || !/^[\w-]{1,128}$/.test(id)) return new Response('Not found', { status: 404 });
     const file = core.library.resolveMedia(kind, id);
-    if (!file) return new Response('Not found', { status: 404 });
+    if (!file) return new Response('Not found', { status: 404, headers: MEDIA_CORS });
     return serveFile(file, req.headers.get('range'));
   });
 }
+
+/** Media is readable by the app origin only (fetch/canvas); <img>/<video> need no CORS. */
+const MEDIA_CORS = { 'access-control-allow-origin': APP_ORIGIN, 'access-control-allow-headers': 'range', 'access-control-expose-headers': 'content-range, content-length, accept-ranges', vary: 'origin' };
 
 async function serveFile(file: string, range: string | null): Promise<Response> {
   const { size } = await fs.promises.stat(file);
@@ -199,15 +202,15 @@ async function serveFile(file: string, range: string | null): Promise<Response> 
       end = size - 1;
     }
     end = Math.min(end, size - 1);
-    if (start > end || start >= size) return new Response(null, { status: 416, headers: { 'content-range': `bytes */${size}` } });
+    if (start > end || start >= size) return new Response(null, { status: 416, headers: { ...MEDIA_CORS, 'content-range': `bytes */${size}` } });
     const stream = Readable.toWeb(fs.createReadStream(file, { start, end })) as ReadableStream;
     return new Response(stream, {
       status: 206,
-      headers: { 'content-type': type, 'content-length': String(end - start + 1), 'content-range': `bytes ${start}-${end}/${size}`, 'accept-ranges': 'bytes' },
+      headers: { ...MEDIA_CORS, 'content-type': type, 'content-length': String(end - start + 1), 'content-range': `bytes ${start}-${end}/${size}`, 'accept-ranges': 'bytes' },
     });
   }
   const stream = Readable.toWeb(fs.createReadStream(file)) as ReadableStream;
-  return new Response(stream, { status: 200, headers: { 'content-type': type, 'content-length': String(size), 'accept-ranges': 'bytes' } });
+  return new Response(stream, { status: 200, headers: { ...MEDIA_CORS, 'content-type': type, 'content-length': String(size), 'accept-ranges': 'bytes' } });
 }
 
 // ---------------------------------------------------------------------------

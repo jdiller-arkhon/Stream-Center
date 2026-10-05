@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { Settings, type SettingsPatch } from '../../shared/contracts';
 import { defaultSettings } from '../../shared/defaults';
 import { kvGet, kvSet, type Db } from '../core/database';
@@ -41,13 +42,25 @@ export class SettingsService {
       const v = patch.media?.[key];
       if (v) patch.media![key] = safeAbsolutePath(v, key);
     }
-    for (const key of ['ffmpegPath', 'ffprobePath'] as const) {
+    // Tool paths are executed later, so only accept binaries with the expected names.
+    for (const [key, pattern, label] of [
+      ['ffmpegPath', /^ffmpeg(\.exe)?$/i, 'ffmpeg'],
+      ['ffprobePath', /^ffprobe(\.exe)?$/i, 'ffprobe'],
+    ] as const) {
       const v = patch.tools?.[key];
-      if (v) patch.tools![key] = safeAbsolutePath(v, key);
+      if (!v) continue;
+      patch.tools![key] = safeAbsolutePath(v, key);
+      if (!pattern.test(path.basename(v))) fail('VALIDATION', `Choose the ${label} executable (${label}.exe)`);
     }
-    for (const key of ['whisperPath', 'modelPath'] as const) {
-      const v = patch.transcription?.[key];
-      if (v) patch.transcription![key] = safeAbsolutePath(v, key);
+    const whisper = patch.transcription?.whisperPath;
+    if (whisper) {
+      patch.transcription!.whisperPath = safeAbsolutePath(whisper, 'whisperPath');
+      if (!/^(whisper(-cli)?|main)(\.exe)?$/i.test(path.basename(whisper))) fail('VALIDATION', 'Choose the whisper.cpp executable (whisper-cli.exe)');
+    }
+    const model = patch.transcription?.modelPath;
+    if (model) {
+      patch.transcription!.modelPath = safeAbsolutePath(model, 'modelPath');
+      if (!/\.(bin|gguf)$/i.test(model)) fail('VALIDATION', 'Choose a whisper.cpp model file (.bin)');
     }
     if (patch.shortcuts) {
       const seen = new Map<string, string>();
