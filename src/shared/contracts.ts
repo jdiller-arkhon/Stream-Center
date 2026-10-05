@@ -405,6 +405,58 @@ export interface OperationMap {
         input: undefined;
         output: void;
     };
+    /** Desktop only: local AI thumbnail generator settings and readiness. */
+    thumbAiStatus: {
+        input: undefined;
+        output: ThumbAiStatus;
+    };
+    thumbAiConfigure: {
+        input: {
+            engine: ThumbAiEngine;
+            serverUrl: string;
+        };
+        output: ThumbAiStatus;
+    };
+    /** Native picker for the stable-diffusion.cpp program or a model file. */
+    thumbAiPick: {
+        input: {
+            kind: 'engine' | 'model';
+        };
+        output: ThumbAiStatus;
+    };
+    /** Generates thumbnail backgrounds on this PC (no text; the app adds the title). */
+    generateThumbnail: {
+        input: {
+            description: string;
+            /** Optional starting image (PNG/JPEG data URL), e.g. an upload or a video frame. */
+            initImage: string | null;
+            /** 0.1–1: how far the result may move from the starting image. */
+            strength: number;
+            count: number;
+        };
+        output: {
+            images: string[];
+            engine: string;
+            seed: number;
+            ms: number;
+        };
+    };
+    cancelThumbnail: {
+        input: undefined;
+        output: void;
+    };
+}
+export type ThumbAiEngine = 'off' | 'sdcpp' | 'webui';
+export interface ThumbAiStatus {
+    engine: ThumbAiEngine;
+    /** File names only (the full paths stay in the desktop service). */
+    engineFile: string | null;
+    modelFile: string | null;
+    serverUrl: string;
+    ready: boolean;
+    /** What is missing, or what is ready (e.g. the WebUI's loaded model). */
+    detail: string | null;
+    busy: boolean;
 }
 export interface Moment {
     atMs: number;
@@ -438,7 +490,7 @@ export interface YouTubeKit {
     frames: string[];
 }
 /** Operations only the desktop bridge implements; DemoAdapter rejects them. */
-export const DESKTOP_ONLY_OPERATIONS: Operation[] = ['importNative', 'relinkNative', 'pickMusic', 'setObsPassword', 'suggestMoments', 'youtubeKit', 'saveThumbnail', 'revealOutput', 'openYouTubeStudio'];
+export const DESKTOP_ONLY_OPERATIONS: Operation[] = ['importNative', 'relinkNative', 'pickMusic', 'setObsPassword', 'suggestMoments', 'youtubeKit', 'saveThumbnail', 'revealOutput', 'openYouTubeStudio', 'thumbAiStatus', 'thumbAiConfigure', 'thumbAiPick', 'generateThumbnail', 'cancelThumbnail'];
 export type Operation = keyof OperationMap;
 export interface StudioService {
     readonly mode: 'demo' | 'desktop';

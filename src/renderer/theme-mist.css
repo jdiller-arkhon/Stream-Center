@@ -1907,3 +1907,113 @@ h3 {
 .yt-accents button.selected {
   box-shadow: 0 0 0 2px var(--accent);
 }
+
+/* ---------------------------------------------------------------- AI thumbnails */
+.yt-frames button {
+  position: relative;
+}
+.yt-frame-tag {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.yt-ai {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--accent-tint), transparent 70%), var(--surface);
+}
+.yt-ai-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.yt-ai-head svg {
+  color: var(--accent);
+}
+.yt-ai-head .badge {
+  margin-left: auto;
+}
+.yt-ai textarea {
+  width: 100%;
+  resize: vertical;
+}
+.yt-ai .fine-print {
+  margin: 0;
+}
+.yt-loading-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.yt-layers {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.yt-layer {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 96px minmax(80px, 140px) 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.yt-layer img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: repeating-conic-gradient(var(--fill-strong) 0 25%, transparent 0 50%) 0 0 / 10px 10px;
+}
+.yt-layer strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.yt-layer select {
+  padding: 6px 8px;
+}
+.thumb-ai-settings {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.thumb-ai-settings h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.thumb-ai-settings p {
+  margin: 0;
+}
+.thumb-ai-files {
+  display: grid;
+  gap: 8px;
+}
+.thumb-ai-files > div {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.thumb-ai-files strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -34,10 +34,11 @@ function youtubeKit(value: unknown) { const k = obj(value); id(k.jobId); for (co
     list(k.checks, 'checks').forEach(c => { const v = obj(c); str(v.id, 'check'); str(v.label, 'check'); str(v.detail, 'check'); one(v.status, ['pass', 'warn', 'fail'], 'check status'); });
     list(k.chapters, 'chapters').forEach(c => { const v = obj(c); number(v.atMs, 0, 86400000, 'chapter'); str(v.title, 'chapter'); });
     list(k.frames, 'frames').forEach(f => { if (!str(f, 'frame', 3_000_000).startsWith('data:image/jpeg;base64,')) invalid('Invalid frame'); }); }
+function thumbAiStatus(value: unknown) { const t = obj(value); one(t.engine, ['off', 'sdcpp', 'webui'], 'engine'); nullable(t.engineFile, x => str(x, 'engine file')); nullable(t.modelFile, x => str(x, 'model file')); str(t.serverUrl, 'server address'); bool(t.ready, 'ready'); nullable(t.detail, x => str(x, 'detail')); bool(t.busy, 'busy'); }
 export const validateProfile = (p: unknown): SessionProfile => { profile(p); return p as SessionProfile; };
 export const validateProject = (p: unknown): EditProject => { project(p); return p as EditProject; };
 export function validateRequest(op: Operation, input: unknown): void {
-    if (['disconnect', 'endSession', 'saveReplay', 'reset', 'importNative', 'pickMusic', 'openYouTubeStudio'].includes(op)) {
+    if (['disconnect', 'endSession', 'saveReplay', 'reset', 'importNative', 'pickMusic', 'openYouTubeStudio', 'thumbAiStatus', 'cancelThumbnail'].includes(op)) {
         if (input !== undefined)
             invalid('Expected no input');
         return;
@@ -120,6 +121,21 @@ export function validateRequest(op: Operation, input: unknown): void {
             if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(str(p.dataUrl, 'thumbnail', 3_000_000)))
                 invalid('Thumbnail must be a JPEG image');
             break;
+        case 'thumbAiConfigure':
+            one(p.engine, ['off', 'sdcpp', 'webui'], 'engine');
+            str(p.serverUrl, 'server address', 300);
+            break;
+        case 'thumbAiPick':
+            one(p.kind, ['engine', 'model'], 'file kind');
+            break;
+        case 'generateThumbnail':
+            if (!str(p.description, 'description', 600).trim())
+                invalid('Describe the thumbnail you want');
+            nullable(p.initImage, x => { if (!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(str(x, 'starting image', 12_000_000)))
+                invalid('The starting image must be a PNG or JPEG'); });
+            number(p.strength, 0.1, 1, 'strength');
+            one(p.count, [1, 2, 3, 4], 'image count');
+            break;
         case 'revealOutput':
         case 'relinkNative':
         case 'selectProfile':
@@ -198,6 +214,15 @@ export function validateResponse(op: Operation, value: unknown): unknown {
         list(value, 'moments').forEach(m => { const v = obj(m); number(v.atMs, 0, 86400000, 'moment'); number(v.excessLu, -200, 200, 'loudness'); });
     else if (op === 'youtubeKit')
         youtubeKit(value);
+    else if (op === 'thumbAiStatus' || op === 'thumbAiConfigure' || op === 'thumbAiPick')
+        thumbAiStatus(value);
+    else if (op === 'generateThumbnail') {
+        const g = obj(value);
+        list(g.images, 'images').forEach(x => { if (!str(x, 'image', 30_000_000).startsWith('data:image/png;base64,')) invalid('Invalid generated image'); });
+        str(g.engine, 'engine');
+        number(g.seed, 0, Number.MAX_SAFE_INTEGER, 'seed');
+        number(g.ms, 0, 86400000, 'time');
+    }
     else if (op === 'saveThumbnail')
         str(obj(value).fileName, 'file name');
     else if (op === 'prepareSession')

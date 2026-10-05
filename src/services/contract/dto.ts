@@ -728,7 +728,7 @@ export type StatusStrip = z.infer<typeof StatusStrip>;
 
 export const PickPathRequest = z.object({
   kind: z.enum(['directory', 'file', 'files']),
-  purpose: z.enum(['library', 'export', 'game', 'companion', 'artwork', 'music', 'import', 'ffmpeg', 'ffprobe', 'whisper', 'model']),
+  purpose: z.enum(['library', 'export', 'game', 'companion', 'artwork', 'music', 'import', 'ffmpeg', 'ffprobe', 'whisper', 'model', 'imageEngine', 'imageModel']),
   title: z.string().max(120).nullable(),
 });
 export type PickPathRequest = z.infer<typeof PickPathRequest>;

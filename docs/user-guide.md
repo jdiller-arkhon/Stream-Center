@@ -29,7 +29,18 @@ Turn on in **Settings → Shortcuts**. Everything runs offline on your PC; no au
   - It checks the real file against YouTube's rules: Shorts length, resolution, aspect, frame rate, loudness and peaks.
   - It drafts a title, description (with chapters when your cut has three or more parts of at least 10 seconds) and tags. Edit them and copy them.
   - It builds a 1280×720 thumbnail from a frame of your video with your text, saved next to the video.
+  - **Describe a background** creates thumbnail art from your words with AI running on your own GPU (nothing is uploaded). You can start from a video frame or an image you upload, and add your own images on top (a cut-out of you, a logo). Drift Studio adds the title text, because AI models draw text badly.
   - **Open YouTube Studio** opens YouTube in your browser. Choose Create → Upload videos and drag in the file (**Show video in folder** finds it). Drift Studio never signs in or uploads for you.
+
+### Setting up the AI thumbnail generator
+In **Settings → AI & Privacy**, pick one of two engines:
+- **Built-in (stable-diffusion.cpp):**
+  1. Download stable-diffusion.cpp for Windows: the CUDA build for NVIDIA cards, Vulkan for AMD/Intel.
+  2. Download a model. SD-Turbo or SDXL-Turbo are fast; `.gguf` files use less GPU memory.
+  3. Choose the `sd-cli.exe` program and the model file.
+- **Stable Diffusion WebUI:** if you already use AUTOMATIC1111 or Forge, start it with `--api` and enter its address (usually `http://127.0.0.1:7860`).
+
+Generation is paused while you are live, so your stream doesn't drop frames. Check a model's licence before using it commercially.
 
 ## Exporting
 Choose a preset or settings and export. The queue shows real progress; a file is marked done only after it is checked (length, audio and video present and in sync). Cancel or retry any time; *Open* shows the result.

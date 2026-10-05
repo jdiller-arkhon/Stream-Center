@@ -26,6 +26,8 @@ import type {
   StructuredError,
   StudioSettings as UiSettings,
   StudioSnapshot,
+  ThumbAiEngine,
+  ThumbAiStatus,
   YouTubeKit as UiYouTubeKit,
 } from '../../shared/contracts';
 import { validateProfile, validateProject, validateRequest } from '../../shared/validation';
@@ -35,9 +37,11 @@ import { DEFAULT_CAPTION_STYLE } from '../contract/defaults';
 import { kvGet, kvSet } from '../core/database';
 import { DriftFailure, fail, toDriftError } from '../core/errors';
 import { newId } from '../core/ids';
+import { run } from '../core/proc';
 import { diskStatus, isFile, safeAbsolutePath, sanitizeFileStem } from '../core/paths';
 import { toAsset, type ClipRecord } from '../library/ClipLibrary';
 import { isProcessRunning, launch, processNameFor } from '../sessions/launcher';
+import { type ImageEngine, isJpeg, isPng, SdCppEngine, validateLocalServer, WebUiEngine } from '../media/imageGen';
 import { buildChapters, buildMetadata, findMoments, isShort, jpegSize, YOUTUBE_LOUDNESS_LUFS, youtubeChecks } from '../media/youtube';
 
 const KV_PROFILES = 'ui.profiles';
@@ -48,6 +52,8 @@ const SETUP_ID = 'setup';
 const KV_PROJECTS = 'ui.projects';
 const KV_APPEARANCE = 'ui.appearance';
 const KV_MUSIC = 'ui.music';
+const KV_THUMB_AI = 'ui.thumbAi';
+const DEFAULT_WEBUI = 'http://127.0.0.1:7860';
 const UNCONFIGURED = 'unconfigured';
 const MIC_ID = 'microphone';
 const URI_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
@@ -154,6 +160,7 @@ export class StudioBridge {
 
   dispose(): void {
     this.disposed = true;
+    this.generation?.abort(); // never leave an image engine running after the app closes
     for (const u of this.unsubscribers) u();
     if (this.timer) clearTimeout(this.timer);
     if (this.ticker) clearInterval(this.ticker);
@@ -509,7 +516,7 @@ export class StudioBridge {
     const ops: readonly string[] = [
       'connect', 'disconnect', 'selectProfile', 'saveProfile', 'prepareSession', 'startSession', 'endSession', 'launchGame',
       'recording', 'replay', 'saveReplay', 'scene', 'streaming', 'audio', 'importClips', 'updateClip', 'saveProject', 'export',
-      'cancelJob', 'retryJob', 'openOutput', 'saveSettings', 'sessionNotes', 'importNative', 'relinkNative', 'pickMusic', 'setObsPassword', 'suggestMoments', 'youtubeKit', 'saveThumbnail', 'revealOutput', 'openYouTubeStudio',
+      'cancelJob', 'retryJob', 'openOutput', 'saveSettings', 'sessionNotes', 'importNative', 'relinkNative', 'pickMusic', 'setObsPassword', 'suggestMoments', 'youtubeKit', 'saveThumbnail', 'revealOutput', 'openYouTubeStudio', 'thumbAiStatus', 'thumbAiConfigure', 'thumbAiPick', 'generateThumbnail', 'cancelThumbnail',
     ];
     if (operation === 'scenario' || operation === 'reset') throw new BridgeError({ code: 'UNAVAILABLE', message: 'Demo scenarios are disabled in desktop mode', recoverable: false, details: null });
     if (!ops.includes(operation)) throw new BridgeError({ code: 'INVALID_INPUT', message: 'Operation not allowlisted', recoverable: false, details: null });
@@ -693,6 +700,37 @@ export class StudioBridge {
       case 'openYouTubeStudio':
         if (!this.opts.openYouTubeStudio) fail('UNSUPPORTED', 'Opening the browser is not available here');
         await this.opts.openYouTubeStudio();
+        return undefined;
+      case 'thumbAiStatus':
+        return this.thumbAiStatus();
+      case 'thumbAiConfigure': {
+        const { engine, serverUrl } = p as OperationMap['thumbAiConfigure']['input'];
+        const url = serverUrl.trim() || DEFAULT_WEBUI;
+        if (engine === 'webui') {
+          const bad = validateLocalServer(url);
+          if (bad) fail('VALIDATION', bad);
+        }
+        kvSet(core.db, KV_THUMB_AI, { ...this.thumbAiConfig(), engine, serverUrl: url });
+        return this.thumbAiStatus();
+      }
+      case 'thumbAiPick': {
+        const { kind } = p as OperationMap['thumbAiPick']['input'];
+        const [file] = await core.platform.pickPath(
+          kind === 'engine'
+            ? { kind: 'file', purpose: 'imageEngine', title: 'Choose the stable-diffusion.cpp program (sd-cli)' }
+            : { kind: 'file', purpose: 'imageModel', title: 'Choose a Stable Diffusion model' },
+        );
+        if (file) {
+          const abs = safeAbsolutePath(file);
+          if (!isFile(abs)) fail('NOT_FOUND', 'File not found', { detail: abs });
+          kvSet(core.db, KV_THUMB_AI, { ...this.thumbAiConfig(), engine: 'sdcpp', [kind === 'engine' ? 'enginePath' : 'modelPath']: abs });
+        }
+        return this.thumbAiStatus();
+      }
+      case 'generateThumbnail':
+        return this.generateThumbnail(p as OperationMap['generateThumbnail']['input']);
+      case 'cancelThumbnail':
+        this.generation?.abort();
         return undefined;
       case 'saveSettings':
         return this.saveSettings(p as UiSettings);
@@ -934,6 +972,73 @@ export class StudioBridge {
     fs.writeFileSync(out, bytes, { flag: 'wx' });
     this.core.platform.showItemInFolder(out);
     return { fileName: path.basename(out) };
+  }
+
+  // ---------------------------------------------------------------- local AI thumbnails
+
+  private generation: AbortController | null = null;
+
+  private thumbAiConfig(): { engine: ThumbAiEngine; enginePath: string | null; modelPath: string | null; serverUrl: string } {
+    const c = kvGet<Partial<{ engine: ThumbAiEngine; enginePath: string | null; modelPath: string | null; serverUrl: string }>>(this.core.db, KV_THUMB_AI) ?? {};
+    return { engine: c.engine ?? 'off', enginePath: c.enginePath ?? null, modelPath: c.modelPath ?? null, serverUrl: c.serverUrl ?? DEFAULT_WEBUI };
+  }
+
+  private async thumbAiStatus(): Promise<ThumbAiStatus> {
+    const c = this.thumbAiConfig();
+    let ready = false;
+    let detail: string | null = null;
+    if (c.engine === 'off') detail = 'Off. Choose an engine to generate thumbnails on this PC.';
+    else if (c.engine === 'sdcpp') {
+      detail = SdCppEngine.problem(c.enginePath, c.modelPath);
+      ready = detail === null;
+      if (ready) detail = `Ready · ${path.basename(c.modelPath!)}`;
+    } else {
+      const s = await new WebUiEngine(c.serverUrl).check();
+      ready = s.ok;
+      detail = s.ok ? `Connected${s.model ? ` · ${s.model}` : ''}` : s.reason;
+    }
+    return {
+      engine: c.engine,
+      engineFile: c.enginePath ? path.basename(c.enginePath) : null,
+      modelFile: c.modelPath ? path.basename(c.modelPath) : null,
+      serverUrl: c.serverUrl,
+      ready,
+      detail,
+      busy: this.generation !== null,
+    };
+  }
+
+  private async generateThumbnail(input: OperationMap['generateThumbnail']['input']): Promise<OperationMap['generateThumbnail']['output']> {
+    const c = this.thumbAiConfig();
+    let engine: ImageEngine;
+    if (c.engine === 'sdcpp') {
+      const problem = SdCppEngine.problem(c.enginePath, c.modelPath);
+      if (problem) fail('VALIDATION', problem);
+      engine = new SdCppEngine(c.enginePath!, c.modelPath!, async (input, output, w, h) => {
+        const r = await run(this.core.tools.requireFfmpeg(), ['-hide_banner', '-loglevel', 'error', '-y', '-i', input, '-frames:v', '1', '-vf', `scale=${w}:${h}:force_original_aspect_ratio=increase:flags=lanczos,crop=${w}:${h}`, output], { timeoutMs: 60_000 });
+        if (r.code !== 0 || !isFile(output)) fail('MEDIA_INVALID', 'Could not read the starting image', { detail: r.stderr.slice(-1000) });
+      });
+    } else if (c.engine === 'webui') engine = new WebUiEngine(c.serverUrl);
+    else fail('UNSUPPORTED', 'Turn on the thumbnail generator in Settings → AI & Privacy');
+    if (this.generation) fail('BUSY', 'A thumbnail is already being generated');
+    // Generation saturates the GPU; during a live stream that would drop frames for viewers.
+    if (this.core.obs.getState().streaming.active) fail('BUSY', 'You are live. Generate thumbnails after the stream so viewers do not see dropped frames.');
+    let init: Buffer | null = null;
+    if (input.initImage) {
+      init = Buffer.from(input.initImage.slice(input.initImage.indexOf(',') + 1), 'base64');
+      if (!isPng(init) && !isJpeg(init)) fail('VALIDATION', 'The starting image must be a PNG or JPEG');
+    }
+    const ctrl = new AbortController();
+    this.generation = ctrl;
+    this.schedule();
+    const started = Date.now();
+    const seed = Math.floor(Math.random() * 2 ** 31);
+    try {
+      const r = await engine.generate({ description: input.description, init, strength: input.strength, count: input.count, seed }, ctrl.signal);
+      return { images: r.images.map((b) => 'data:image/png;base64,' + b.toString('base64')), engine: engine.label, seed, ms: Date.now() - started };
+    } finally {
+      this.generation = null;
+    }
   }
 
   private resolveExportDir(destination: string): string {

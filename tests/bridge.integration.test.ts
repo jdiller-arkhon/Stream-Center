@@ -13,6 +13,7 @@ import { makeProject } from '../src/services/fixtures';
 import { BridgeError, StudioBridge } from '../src/services/bridge/StudioBridge';
 import type { DriftCore } from '../src/services/DriftCore';
 import { FakeObs } from './helpers/fakeObs';
+import { makeFakeSdCli, pngOf, startFakeWebUi } from './helpers/fakeImageEngines';
 import { generateClip, makeCore, ok, tempDir, waitFor, type TestPlatform } from './helpers/env';
 
 const posixOnly = process.platform === 'win32' ? it.skip : it;
@@ -423,5 +424,64 @@ describe('StudioBridge (renderer protocol v1 over desktop services)', () => {
     expect(events.some((m) => /^Marker · 0:00:0\d into the session \(voice\)$/.test(m))).toBe(true);
     expect(s.voice?.lastCommand).toBe('mark');
     await call('endSession');
+  });
+  posixOnly('local AI thumbnails: setup, WebUI and stable-diffusion.cpp generation, cancel, no generation while live', async () => {
+    type St = import('../src/shared/contracts').ThumbAiStatus;
+    type Gen = { images: string[]; engine: string; seed: number; ms: number };
+    let st = await call<St>('thumbAiStatus');
+    expect(st).toMatchObject({ engine: 'off', ready: false, busy: false });
+    await expect(call('generateThumbnail', { description: 'x', initImage: null, strength: 0.5, count: 1 })).rejects.toThrow(/Settings/);
+
+    // WebUI on this PC; a LAN address is refused.
+    const ui = await startFakeWebUi();
+    try {
+      await expect(call('thumbAiConfigure', { engine: 'webui', serverUrl: 'http://192.168.0.9:7860' })).rejects.toThrow(/this PC/);
+      st = await call<St>('thumbAiConfigure', { engine: 'webui', serverUrl: ui.url });
+      expect(st.ready).toBe(true);
+      expect(st.detail).toMatch(/Connected · sd_xl_turbo/);
+      const g = await call<Gen>('generateThumbnail', { description: 'storm over a castle', initImage: null, strength: 0.6, count: 2 });
+      expect(g.images).toHaveLength(2);
+      expect(g.engine).toBe('Stable Diffusion WebUI');
+      const start = 'data:image/png;base64,' + pngOf(1280, 720).toString('base64');
+      await call<Gen>('generateThumbnail', { description: 'same, but at dawn', initImage: start, strength: 0.4, count: 1 });
+      expect(ui.requests.at(-1)!.path).toBe('/sdapi/v1/img2img');
+    } finally {
+      await ui.close();
+    }
+
+    // Built-in engine: choosing the program and model switches to it.
+    const exe = makeFakeSdCli(path.join(dir, 'sd'));
+    const model = path.join(dir, 'sd', 'sd_turbo.gguf');
+    fs.writeFileSync(model, 'm');
+    platform.pickResult = [exe];
+    st = await call<St>('thumbAiPick', { kind: 'engine' });
+    expect(st).toMatchObject({ engine: 'sdcpp', engineFile: 'sd-cli', ready: false });
+    platform.pickResult = [model];
+    st = await call<St>('thumbAiPick', { kind: 'model' });
+    expect(st).toMatchObject({ ready: true, modelFile: 'sd_turbo.gguf' });
+    const jpg = execFileSync('ffmpeg', ['-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=1280x720', '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'mjpeg', 'pipe:1']);
+    const g = await call<Gen>('generateThumbnail', { description: 'arena', initImage: 'data:image/jpeg;base64,' + jpg.toString('base64'), strength: 0.5, count: 1 });
+    expect(g.images[0]!.startsWith('data:image/png;base64,')).toBe(true);
+    const args = JSON.parse(fs.readFileSync(path.join(dir, 'sd', 'sd-calls.log'), 'utf8').trim().split('\n').pop()!) as string[];
+    expect(args[args.indexOf('-W') + 1]).toBe('768');
+    expect(args).toContain('--init-img');
+    await expect(call('generateThumbnail', { description: 'x', initImage: 'data:image/gif;base64,R0lG', strength: 0.5, count: 1 })).rejects.toThrow(/PNG or JPEG/);
+
+    // Cancel a long run.
+    makeFakeSdCli(path.join(dir, 'sd'), 'slow');
+    const running = bridge.request('generateThumbnail', { description: 'slow', initImage: null, strength: 0.5, count: 1 }, 'gen-slow');
+    await waitFor(async () => ((await call<St>('thumbAiStatus')).busy ? true : null));
+    await call('cancelThumbnail');
+    await expect(running).rejects.toThrow(/Cancelled/);
+    expect((await call<St>('thumbAiStatus')).busy).toBe(false);
+
+    // Never while live: generation saturates the GPU.
+    makeFakeSdCli(path.join(dir, 'sd'));
+    await call('setObsPassword', { password: 'hunter2' });
+    await call('connect', { host: '127.0.0.1', port: obs.port });
+    await call('streaming', { enabled: true, destination: 'YouTube' });
+    await waitFor(async () => ((await state()).obs.streaming ? true : null));
+    await expect(call('generateThumbnail', { description: 'x', initImage: null, strength: 0.5, count: 1 })).rejects.toThrow(/live/);
+    await call('streaming', { enabled: false, destination: 'YouTube' });
   });
 });

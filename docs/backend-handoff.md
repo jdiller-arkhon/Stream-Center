@@ -29,6 +29,16 @@ Status date: 2026-10-05. Branch: `claude/wizardly-johnson-9f4gfl`.
   - **Thumbnail maker:** the renderer composes frame + title + accent on a canvas. `saveThumbnail` accepts only a 1280×720 JPEG ≤ 2 MB (checked from the JPEG header in main), writes `<video> thumbnail.jpg` next to the export without overwriting, and reveals it.
   - **Upload hand-off:** `revealOutput` shows the file; `openYouTubeStudio` opens the fixed constant `https://studio.youtube.com/` (never a renderer-supplied URL).
   - **Direct API upload is deferred.** It needs a Google Cloud OAuth client, the `youtube.upload` scope and Google's app verification (unverified apps upload as private only). That is a product decision, not a code gap.
+- **Local AI thumbnail generator** (YouTube kit → Thumbnail; Settings → AI & Privacy). Entirely on the user's PC; nothing is uploaded.
+  - **Engines** (`src/services/media/imageGen.ts`):
+    - **stable-diffusion.cpp** (MIT) runs as a child process with a program and model file the user picks. Arguments: `-m -p -n -W -H --steps --cfg-scale -s -o`, plus `--init-img --strength` for image-to-image. `-M img2img` is added only for older builds whose `--help` lists that mode. The starting image is fitted to the generation size with FFmpeg first.
+    - **AUTOMATIC1111 / Forge WebUI API** (`/sdapi/v1/txt2img|img2img`, started with `--api`). Loopback addresses only.
+  - **Settings by model name:** few-step models (Turbo/Lightning/LCM/Hyper/Schnell) get 4 steps, CFG 1; others 24 steps, CFG 6.5. SDXL-class models generate at 1344×768, SD 1.x/2.x at 768×448. The app centre-crops to 1280×720.
+  - **Prompts** append a thumbnail style and a negative prompt for text/watermarks. Models draw text badly, so the app composites the title itself.
+  - **UI:** describe the background; optionally start from the selected background (a video frame or an upload) with a "change" strength; choose 1/2/4 options; cancel at any time. Uploaded images can be backgrounds or **layers on top** (up to 3, left/centre/right, sized and anchored to the bottom, e.g. a transparent cut-out or a logo). Then the existing text/accent compositor and `saveThumbnail`.
+  - **Guards:** one generation at a time; refused while streaming (it saturates the GPU and would drop viewers' frames); aborted on app close; out-of-memory explained.
+  - **Ops (desktop only):** `thumbAiStatus`, `thumbAiConfigure`, `thumbAiPick`, `generateThumbnail`, `cancelThumbnail`. Config is stored in kv `ui.thumbAi`; the UI only sees file names.
+  - **Verified here:** a real stable-diffusion.cpp build (CPU) generated an image from SD-Turbo (Q8 GGUF) in about 30 s with these flags. The automated tests use a fake `sd-cli` and a fake WebUI server, both returning real PNGs. Not bundled: engine builds are GPU-specific and models are 2–7 GB with their own licences, so the user downloads both.
 - **CI** (`.github/workflows/frontend.yml`): two jobs. *Renderer* runs the lockfile check, build, contract tests and the browser demo. *Desktop* installs FFmpeg/Xvfb/flite first, then typechecks, runs the service tests, builds, fetches the voice model and runs the Electron end-to-end suite. Earlier runs failed because the service tests ran before FFmpeg was installed. A vitest global setup now fails fast with a clear message when FFmpeg is missing.
 - **Logo.** The supplied drift logo is redrawn as vector artwork (`src/renderer/components/Logo.tsx`): brand gradient in the sidebar, white on the hero, plus `public/favicon.svg` and `build/icon.png`/`icon.svg` for the installer.
 
@@ -197,8 +207,8 @@ npm run dist:win           # NSIS installer → release/ (run on Windows)
 
 | Suite | Result | What it proves |
 | --- | --- | --- |
-| `npm run test:e2e` | **52/52** | Real Electron app, real built UI, clicked through every function. It checks both what the UI shows and the real effect behind it. |
-| `npm run test:services` | **63/63** | Services and `StudioBridge` against a fake obs-websocket v5 server and real FFmpeg. Every snapshot and response passes the renderer's own validators. |
+| `npm run test:e2e` | **56/56** | Real Electron app, real built UI, clicked through every function. It checks both what the UI shows and the real effect behind it. |
+| `npm run test:services` | **74/74** | Services and `StudioBridge` against a fake obs-websocket v5 server and real FFmpeg. Every snapshot and response passes the renderer's own validators. |
 | `npm run test:renderer` | **14/14** | ChatGPT's contract and adapter tests. |
 | `npm run test:browser` | **37/37** | ChatGPT's browser demo suite: layouts, overflow, focus, keyboard and dialogs, run with the new theme. |
 | `npm run typecheck` | clean | Renderer and desktop configs (TypeScript 7). |
@@ -216,6 +226,7 @@ The end-to-end run covers:
 - Open Output, and import through the native picker;
 - saying “Clip that” into a fake microphone (synthesized speech) saves a replay;
 - Make a Short → Shorts preset → a 1080×1920 export at −14.0 LUFS → YouTube kit checks pass on the real file, with a `#Shorts` title → a 1280×720 thumbnail saved next to the video → Open YouTube Studio opens the fixed URL;
+- Settings connects the AI thumbnail generator to a (fake) local WebUI → Generate creates two AI backgrounds from a description → an uploaded PNG is layered on top → the thumbnail is saved;
 - scene switch with real scene names, and a decoded OBS preview frame;
 - Go Live, still live after changing screens, then End stream, with the live warning cleared;
 - mute and unmute of the OBS mic;

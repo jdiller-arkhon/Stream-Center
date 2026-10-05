@@ -120,6 +120,8 @@ const FILTERS: Record<PickPathRequest['purpose'], Electron.FileFilter[]> = {
   ffprobe: process.platform === 'win32' ? [{ name: 'ffprobe.exe', extensions: ['exe'] }] : [],
   whisper: process.platform === 'win32' ? [{ name: 'Programs', extensions: ['exe'] }] : [],
   model: [{ name: 'Whisper model', extensions: ['bin', 'gguf'] }],
+  imageEngine: process.platform === 'win32' ? [{ name: 'stable-diffusion.cpp (sd.exe / sd-cli.exe)', extensions: ['exe'] }] : [],
+  imageModel: [{ name: 'Stable Diffusion model', extensions: ['safetensors', 'gguf', 'ckpt'] }],
 };
 
 function createPlatform(): Platform {

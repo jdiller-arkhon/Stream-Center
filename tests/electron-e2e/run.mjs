@@ -48,6 +48,10 @@ const { FakeObs } = require(path.join(tmp, 'fakeObs.cjs'));
 let replayN = 0;
 const obs = new FakeObs({ password: 'hunter2', onSaveReplay: () => clip(path.join(tmp, 'obs', `Replay ${++replayN}.mp4`), 6) });
 const port = await obs.start();
+// A stand-in for a local Stable Diffusion WebUI (AUTOMATIC1111/Forge API) that returns real PNGs.
+await build({ entryPoints: [path.join(root, 'tests/helpers/fakeImageEngines.ts')], bundle: true, platform: 'node', format: 'cjs', outfile: path.join(tmp, 'fakeImageEngines.cjs'), logLevel: 'silent' });
+const { startFakeWebUi, pngOf } = require(path.join(tmp, 'fakeImageEngines.cjs'));
+const webui = await startFakeWebUi();
 const game = path.join(tmp, 'games', `e2e-game-${process.pid % 10000}`);
 fs.mkdirSync(path.dirname(game), { recursive: true });
 fs.writeFileSync(game, `#!/bin/sh\necho launched > "${game}.marker"\nsleep 60\n`);
@@ -116,6 +120,13 @@ try {
   await page.getByRole('button', { name: 'Save settings', exact: true }).click();
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
   await page.locator('.connection-mini').getByText(/connected/i).waitFor({ timeout: 15000 }).catch(() => {});
+  // ---- Settings: local AI thumbnail generator (WebUI on this PC)
+  await page.getByRole('button', { name: 'AI & Privacy', exact: true }).click();
+  await page.getByLabel('Thumbnail engine').selectOption('webui');
+  await page.getByLabel('WebUI address').fill(webui.url);
+  await page.locator('.thumb-ai-settings').getByRole('button', { name: 'Connect', exact: true }).click();
+  await page.locator('.thumb-ai-settings .callout', { hasText: 'Connected' }).waitFor({ timeout: 10000 }).catch(() => {});
+  check('AI thumbnail generator connects to a Stable Diffusion WebUI on this PC', await page.locator('.thumb-ai-settings .callout', { hasText: 'Connected · sd_xl_turbo' }).isVisible());
   await nav('Command Center');
   await page.getByText('Connected to OBS', { exact: true }).waitFor({ timeout: 15000 });
   check('OBS connects with password stored by the desktop service', true);
@@ -245,6 +256,20 @@ try {
   check('normalised Short measures close to −14 LUFS', (await page.locator('.yt-check', { hasText: 'Loudness' }).getAttribute('class'))?.includes('pass'), await page.locator('.yt-check', { hasText: 'Loudness' }).innerText());
   check('YouTube kit drafts a #Shorts title', (await page.getByLabel('Video title').inputValue()).includes('#Shorts'), await page.getByLabel('Video title').inputValue());
   await page.getByLabel('Thumbnail text').fill('Clutch moment');
+  // Local AI background from a description, plus an uploaded image placed on top.
+  await page.getByLabel('Thumbnail description').fill('stormy sky over a ruined arena, cinematic');
+  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await page.locator('.yt-frame-tag').first().waitFor({ timeout: 30000 }).catch(() => {});
+  const gen = webui.requests.at(-1);
+  check('Generate makes local AI backgrounds from the description (no text in the prompt result)', (await page.locator('.yt-frame-tag').count()) === 2 && /^stormy sky over a ruined arena/.test(String(gen?.body.prompt)) && /text/.test(String(gen?.body.negative_prompt)), `${await page.locator('.yt-frame-tag').count()} AI tiles`);
+  check('an AI background becomes the selected thumbnail background', (await page.locator('.yt-frames button[aria-checked="true"]').getAttribute('aria-label')) === 'AI 1');
+  const facePng = path.join(tmp, 'media', 'face.png');
+  fs.mkdirSync(path.dirname(facePng), { recursive: true });
+  fs.writeFileSync(facePng, pngOf(400, 600, 'white'));
+  await page.locator('input[type=file][multiple][accept^="image/png"]').setInputFiles(facePng);
+  await page.locator('.yt-layer').first().waitFor({ timeout: 10000 }).catch(() => {});
+  check('uploaded image is placed on top of the thumbnail', (await page.locator('.yt-layer').count()) === 1 && (await page.locator('.yt-layer strong').innerText()) === 'face.png');
+  await page.getByLabel('Position of face.png').selectOption('right');
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(shots, 'desktop-youtube-kit.png') });
   await page.getByRole('button', { name: 'Save thumbnail (1280×720)', exact: true }).click();
@@ -327,6 +352,7 @@ try {
 } finally {
   await Promise.race([app.close(), new Promise((r) => setTimeout(r, 10000))]);
   await obs.stop();
+  await webui.close();
   try {
     execFileSync('pkill', ['-f', game]);
   } catch {
