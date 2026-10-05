@@ -249,7 +249,7 @@ function createWindow(): void {
     height: 1000,
     minWidth: 1100,
     minHeight: 700,
-    backgroundColor: '#000000',
+    backgroundColor: '#faf8ff',
     show: false,
     title: 'Drift Studio',
     autoHideMenuBar: true,

@@ -1,47 +1,73 @@
 /*
- * Drift Studio — Apple-inspired theme layer.
+ * Drift Studio — "purple mist" light theme (Apple-inspired).
  *
- * Loaded after styles.css. It changes only the visual language (type, colour,
- * surfaces, controls) and keeps every layout and responsive rule from styles.css.
- * Direction: macOS dark appearance / Apple pro apps — system font, calm neutral
- * surfaces, hairline separators, translucent chrome, one blue accent, semantic
- * green/orange/red, no glows or neon gradients.
+ * Load order: styles.css → theme-mist-base.css (generated colour remap) → this file.
+ * Only the visual layer changes; layout, markup and behaviour come from styles.css.
+ * Direction: white surfaces floating on a soft lavender mist, system font, hairline
+ * separators, frosted sidebar/toolbar, one purple accent, semantic green/orange/red.
+ * Video frames, thumbnails and illustrative scenes stay dark so footage reads true.
  */
 
 :root {
-  --bg: #121214;
-  --surface: #1c1c1f;
-  --raised: #26262a;
-  --fill: rgba(118, 118, 128, 0.18);
-  --fill-strong: rgba(118, 118, 128, 0.28);
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.14);
-  --label: #f5f5f7;
-  --muted: #98989f;
-  --tertiary: #6e6e73;
-  --accent: #0a84ff;
-  --accent-hover: #409cff;
-  --accent-tint: rgba(10, 132, 255, 0.16);
-  --green: #30d158;
+  --bg: #faf8ff;
+  --surface: #ffffff;
+  --raised: #f6f3fe;
+  --veil: rgba(255, 255, 255, 0.78);
+  --fill: rgba(109, 74, 255, 0.06);
+  --fill-strong: rgba(109, 74, 255, 0.11);
+  --line: rgba(76, 52, 160, 0.12);
+  --line-faint: rgba(76, 52, 160, 0.07);
+  --line-strong: rgba(76, 52, 160, 0.2);
+  --label: #1f1a2e;
+  --muted: #6e6787;
+  --tertiary: #a19bb5;
+  --accent: #7c5cff;
+  --accent-hover: #6a48f5;
+  --accent-text: #6240e8;
+  --accent-tint: rgba(124, 92, 255, 0.12);
+  --accent-line: rgba(124, 92, 255, 0.45);
+  --green: #34c759;
+  --green-text: #1f8a3c;
+  --green-tint: rgba(52, 199, 89, 0.14);
+  --green-line: rgba(52, 199, 89, 0.45);
   --orange: #ff9f0a;
-  --red: #ff453a;
-  --purple: #bf5af2;
+  --orange-text: #b45c00;
+  --orange-tint: rgba(255, 159, 10, 0.14);
+  --orange-line: rgba(255, 159, 10, 0.45);
+  --red: #ff3b30;
+  --red-text: #d70015;
+  --red-tint: rgba(255, 59, 48, 0.12);
+  --red-line: rgba(255, 59, 48, 0.4);
+  --purple: #af52de;
+  --media: #15121f;
+  --shadow-card: 0 1px 2px rgba(76, 52, 160, 0.05), 0 10px 30px rgba(76, 52, 160, 0.07);
+  --mist:
+    radial-gradient(1100px 700px at 8% -12%, rgba(167, 139, 250, 0.32), transparent 62%),
+    radial-gradient(900px 620px at 100% 6%, rgba(216, 180, 254, 0.34), transparent 60%),
+    radial-gradient(1100px 800px at 55% 115%, rgba(196, 181, 253, 0.26), transparent 62%),
+    #faf8ff;
   /* Legacy token names used by styles.css, remapped to the new palette. */
   --cyan: var(--accent);
   --violet: var(--purple);
   --amber: var(--orange);
-  --radius: 12px;
+  --radius: 14px;
 
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, "Helvetica Neue", sans-serif;
   font-size: 13px;
   color: var(--label);
   background: var(--bg);
+  color-scheme: light;
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.003em;
 }
 
 body {
-  background: var(--bg);
+  background: var(--mist);
+  background-attachment: fixed;
+}
+.app,
+.main-shell {
+  background: transparent;
 }
 
 /* ---------- Typography ---------------------------------------------------- */
@@ -123,7 +149,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.45);
 }
 button:not(:disabled):hover {
   filter: none;
@@ -131,8 +157,8 @@ button:not(:disabled):hover {
 input,
 select,
 textarea {
-  background: var(--fill);
-  border: 1px solid transparent;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--label);
   font-size: 13px;
@@ -142,7 +168,7 @@ textarea {
 input:hover,
 select:hover,
 textarea:hover {
-  background: var(--fill-strong);
+  border-color: var(--line-strong);
 }
 input:focus,
 select:focus,
@@ -187,8 +213,8 @@ hr {
 /* ---------- Buttons -------------------------------------------------------- */
 
 .button {
-  background: var(--fill);
-  border: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: none;
   color: var(--label);
@@ -199,30 +225,34 @@ hr {
   transition: background 0.15s, transform 0.1s;
 }
 .button:not(:disabled):hover {
-  background: var(--fill-strong);
+  background: var(--raised);
+  border-color: var(--line-strong);
 }
 .button:not(:disabled):active {
   transform: scale(0.98);
 }
 .button.primary {
-  background: var(--accent);
+  background: linear-gradient(180deg, #8a6dff, var(--accent));
+  border-color: transparent;
   color: #fff;
   font-weight: 600;
-  box-shadow: none;
+  box-shadow: 0 1px 2px rgba(98, 64, 232, 0.25), 0 4px 14px rgba(124, 92, 255, 0.22);
 }
 .button.primary:not(:disabled):hover {
   background: var(--accent-hover);
 }
 .button.danger {
-  background: rgba(255, 69, 58, 0.16);
-  color: var(--red);
+  background: var(--red-tint);
+  border-color: transparent;
+  color: var(--red-text);
 }
 .button.danger:not(:disabled):hover {
-  background: rgba(255, 69, 58, 0.24);
+  background: rgba(255, 59, 48, 0.18);
 }
 .button.ghost {
   background: transparent;
-  color: var(--accent);
+  border-color: transparent;
+  color: var(--accent-text);
 }
 .button.ghost:not(:disabled):hover {
   background: var(--fill);
@@ -237,7 +267,7 @@ hr {
 }
 .icon-button.active,
 .favorite-button.active {
-  color: var(--orange);
+  color: var(--accent);
 }
 
 /* ---------- Badges: soft tinted pills ------------------------------------ */
@@ -252,17 +282,14 @@ hr {
   letter-spacing: 0;
   padding: 3px 9px;
 }
-.badge.cyan {
-  background: var(--accent-tint);
-  color: #64b5ff;
-}
+.badge.cyan,
 .badge.violet {
-  background: rgba(191, 90, 242, 0.16);
-  color: #d68cf7;
+  background: var(--accent-tint);
+  color: var(--accent-text);
 }
 .badge.amber {
-  background: rgba(255, 159, 10, 0.16);
-  color: #ffb340;
+  background: var(--orange-tint);
+  color: var(--orange-text);
 }
 
 /* ---------- Surfaces ------------------------------------------------------ */
@@ -275,10 +302,10 @@ hr {
 .edit-inspector,
 .timeline-panel,
 .job-card {
-  background: var(--surface);
+  background: rgba(255, 255, 255, 0.86);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: none;
+  box-shadow: var(--shadow-card);
 }
 .panel {
   padding: 20px;
@@ -294,8 +321,8 @@ hr {
   font-size: 12px;
 }
 .callout.error {
-  background: rgba(255, 69, 58, 0.14);
-  color: #ff8a80;
+  background: var(--red-tint);
+  color: var(--red-text);
 }
 .empty {
   color: var(--tertiary);
@@ -307,7 +334,7 @@ hr {
 /* ---------- Sidebar: translucent source list ----------------------------- */
 
 .sidebar {
-  background: rgba(30, 30, 33, 0.78);
+  background: rgba(255, 255, 255, 0.55);
   -webkit-backdrop-filter: saturate(180%) blur(30px);
   backdrop-filter: saturate(180%) blur(30px);
   border-right: 1px solid var(--line);
@@ -329,8 +356,8 @@ hr {
   font-size: 18px;
   line-height: 30px;
   color: #fff;
-  background: linear-gradient(180deg, #3a3a3e, #1f1f22);
-  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18), 0 1px 2px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(145deg, #a78bfa, #7c5cff 55%, #6240e8);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.35), 0 2px 8px rgba(124, 92, 255, 0.35);
 }
 .brand-studio {
   font-size: 11px;
@@ -354,7 +381,7 @@ hr {
   padding: 7px 10px;
 }
 .nav-item:not(.selected):hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(124, 92, 255, 0.06);
 }
 .nav-item svg {
   color: var(--accent);
@@ -367,8 +394,11 @@ hr {
   display: none;
 }
 .nav-item.selected {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--label);
+  background: var(--accent-tint);
+  color: var(--accent-text);
+}
+.nav-item.selected strong {
+  font-weight: 600;
 }
 .nav-light {
   display: none;
@@ -377,13 +407,13 @@ hr {
   margin-top: 18px;
 }
 .drift-card {
-  border: 0;
-  background: var(--fill);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.7);
   border-radius: 10px;
   padding: 10px;
 }
 .avatar {
-  background: linear-gradient(180deg, #5e5ce6, #3634a3);
+  background: linear-gradient(145deg, #c4b5fd, #7c5cff);
   border: 0;
   border-radius: 50%;
   color: #fff;
@@ -403,7 +433,7 @@ hr {
 
 .global-header {
   height: 52px;
-  background: rgba(28, 28, 31, 0.72);
+  background: rgba(255, 255, 255, 0.62);
   -webkit-backdrop-filter: saturate(180%) blur(24px);
   backdrop-filter: saturate(180%) blur(24px);
   border-bottom: 1px solid var(--line);
@@ -421,12 +451,12 @@ hr {
 }
 .profile-select {
   font-size: 13px;
-  background: var(--fill);
-  border: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
 }
 .command-search {
-  background: var(--fill);
-  border: 0;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--tertiary);
   font-size: 13px;
@@ -436,17 +466,17 @@ hr {
   background: var(--red);
 }
 .demo-banner {
-  background: rgba(255, 159, 10, 0.08);
+  background: rgba(124, 92, 255, 0.06);
   border-bottom: 1px solid var(--line);
   color: var(--muted);
   font-size: 12px;
 }
 .demo-banner button {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 12px;
 }
 .status-bar {
-  background: rgba(28, 28, 31, 0.8);
+  background: rgba(255, 255, 255, 0.7);
   -webkit-backdrop-filter: saturate(180%) blur(24px);
   backdrop-filter: saturate(180%) blur(24px);
   border-top: 1px solid var(--line);
@@ -470,9 +500,12 @@ hr {
 /* ---------- Command Center ----------------------------------------------- */
 
 .session-hero {
-  background: linear-gradient(160deg, #232327 0%, #1a1a1d 55%, #161618 100%);
+  background:
+    radial-gradient(520px 340px at 85% 40%, rgba(167, 139, 250, 0.35), transparent 70%),
+    linear-gradient(135deg, #ffffff 0%, #f7f3ff 55%, #efe8ff 100%);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 18px;
+  box-shadow: var(--shadow-card);
 }
 .hero-grid,
 .ribbon {
@@ -499,10 +532,10 @@ hr {
   max-width: 420px;
 }
 .game-mark {
-  background: var(--fill);
+  background: var(--accent-tint);
   border: 0;
   border-radius: 10px;
-  color: var(--label);
+  color: var(--accent-text);
   font-size: 18px;
 }
 .profile-summary strong {
@@ -523,18 +556,18 @@ hr {
   font-size: 12px;
 }
 .check-symbol {
-  background: rgba(255, 159, 10, 0.16);
+  background: var(--orange-tint);
   border: 0;
-  color: var(--orange);
+  color: var(--orange-text);
 }
 .check-symbol.ok {
-  background: rgba(48, 209, 88, 0.16);
-  color: var(--green);
+  background: var(--green-tint);
+  color: var(--green-text);
 }
 .capture-preview,
 .editor-preview,
 .program-monitor {
-  background: #000;
+  background: var(--media);
   border-radius: 12px;
 }
 .arena svg {
@@ -545,8 +578,8 @@ hr {
   font-size: 11px;
 }
 .inline-device {
-  background: var(--fill);
-  border: 0;
+  background: var(--raised);
+  border: 1px solid var(--line-faint);
 }
 .pulse-metrics span {
   font-size: 12px;
@@ -590,7 +623,7 @@ hr {
 /* ---------- Segmented controls, tabs, lists ------------------------------ */
 
 .segmented {
-  background: var(--fill);
+  background: rgba(118, 104, 170, 0.12);
   border: 0;
   border-radius: 8px;
   padding: 2px;
@@ -602,12 +635,12 @@ hr {
   padding: 5px 14px;
 }
 .segmented button.selected {
-  background: #636366;
-  color: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  background: #ffffff;
+  color: var(--label);
+  box-shadow: 0 1px 3px rgba(76, 52, 160, 0.18), 0 0 0 0.5px rgba(76, 52, 160, 0.08);
 }
 .inspector-tabs {
-  background: var(--surface);
+  background: rgba(255, 255, 255, 0.92);
   border-bottom: 1px solid var(--line);
 }
 .inspector-tabs button {
@@ -628,11 +661,12 @@ hr {
 }
 .settings-nav button.selected,
 .session-list > button.selected {
-  background: var(--accent);
-  color: #fff;
+  background: var(--accent-tint);
+  color: var(--accent-text);
+  font-weight: 600;
 }
 .session-list > button.selected small {
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--muted);
 }
 .session-list small {
   font-size: 11px;
@@ -654,14 +688,14 @@ hr {
 .scene-3,
 .profile-banner,
 .profile-1 {
-  background: linear-gradient(160deg, #2c2c30, #1b1b1e);
+  background: linear-gradient(150deg, #efe8ff, #ddd0ff);
 }
 .channel-icon,
 .tone-1,
 .tone-2 {
-  background: var(--fill);
+  background: var(--accent-tint);
   border: 0;
-  color: var(--label);
+  color: var(--accent-text);
 }
 .meter-placeholder {
   background: var(--fill);
@@ -678,17 +712,18 @@ hr {
   border-radius: 10px;
 }
 .media-item:not(.selected):hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--fill);
 }
 .media-item.selected {
   background: var(--accent-tint);
-  border-color: rgba(10, 132, 255, 0.5);
+  border-color: var(--accent-line);
   box-shadow: none;
 }
 .play-button {
-  background: var(--label);
+  background: var(--accent);
   border: 0;
-  color: #000;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(124, 92, 255, 0.3);
 }
 .timecode {
   font-variant-numeric: tabular-nums;
@@ -697,8 +732,8 @@ hr {
   border-top-color: var(--line);
 }
 .preset-strip button {
-  background: var(--fill);
-  border: 1px solid transparent;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--label);
   font-size: 12px;
@@ -722,12 +757,13 @@ hr {
   background: var(--orange);
 }
 .timeline-segment {
-  background: rgba(10, 132, 255, 0.22);
-  border: 1px solid rgba(10, 132, 255, 0.55);
+  background: rgba(124, 92, 255, 0.18);
+  border: 1px solid var(--accent-line);
   border-radius: 6px;
 }
 .timeline-segment.selected {
-  border: 2px solid #ffd60a;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.18);
 }
 .timeline-segment > span {
   color: #fff;
@@ -740,16 +776,16 @@ hr {
   border-top-color: var(--red);
 }
 .waveform {
-  background: rgba(48, 209, 88, 0.08);
-  border: 1px solid rgba(48, 209, 88, 0.3);
+  background: rgba(124, 92, 255, 0.06);
+  border: 1px solid var(--line);
   border-radius: 6px;
 }
 .waveform > span {
-  background: var(--green);
-  opacity: 0.7;
+  background: #9b87ff;
+  opacity: 0.8;
 }
 .waveform small {
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(255, 255, 255, 0.85);
   color: var(--muted);
   font-size: 10px;
 }
@@ -765,23 +801,23 @@ hr {
 /* ---------- Overlays ------------------------------------------------------ */
 
 .modal-backdrop {
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(60, 40, 120, 0.18);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
 .modal {
-  background: #2a2a2d;
-  border: 1px solid var(--line-strong);
-  border-radius: 14px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 30px 80px rgba(60, 40, 120, 0.22);
 }
 .toast {
-  background: rgba(44, 44, 48, 0.86);
+  background: rgba(255, 255, 255, 0.86);
   -webkit-backdrop-filter: saturate(180%) blur(24px);
   backdrop-filter: saturate(180%) blur(24px);
   border: 1px solid var(--line-strong);
   border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 40px rgba(60, 40, 120, 0.18);
 }
 .skip-link {
   background: var(--accent);
@@ -795,7 +831,7 @@ hr {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(76, 52, 160, 0.22);
   border: 3px solid transparent;
   background-clip: padding-box;
   border-radius: 999px;
@@ -806,8 +842,9 @@ hr {
 
 /* High-contrast appearance setting keeps its stronger separators. */
 .high-contrast {
-  --line: rgba(255, 255, 255, 0.28);
-  --muted: #c7c7cc;
+  --line: rgba(76, 52, 160, 0.32);
+  --muted: #4a4560;
+  --tertiary: #6e6787;
 }
 
 /* ---------- Refinements: readable control sizes (macOS uses 11–13 px) ---- */
@@ -882,8 +919,8 @@ hr {
   right: -10px;
   top: 6%;
   height: 88%;
-  opacity: 0.55;
-  filter: grayscale(1) contrast(1.05) drop-shadow(0 24px 40px rgba(0, 0, 0, 0.6));
+  opacity: 0.9;
+  filter: grayscale(1) brightness(1.25) sepia(0.35) hue-rotate(215deg) saturate(2.2) drop-shadow(0 24px 36px rgba(98, 64, 232, 0.28));
 }
 .hero-content {
   max-width: 62%;
