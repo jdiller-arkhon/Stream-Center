@@ -55,6 +55,11 @@ describe('StudioBridge (renderer protocol v1 over desktop services)', () => {
   });
 
   afterEach(async () => {
+    try {
+      execFileSync('pkill', ['-f', path.join(dir, 'games')]);
+    } catch {
+      /* nothing running */
+    }
     bridge.dispose();
     await core.dispose();
     await obs.stop();
@@ -112,7 +117,7 @@ describe('StudioBridge (renderer protocol v1 over desktop services)', () => {
     await call('connect', { host: '127.0.0.1', port: obs.port });
 
     // A real executable stands in for the game so launch + duplicate detection are exercised.
-    const game = path.join(dir, 'games', 'drift-game');
+    const game = path.join(dir, 'games', `bg${process.pid % 100000}`);
     fs.mkdirSync(path.dirname(game), { recursive: true });
     fs.writeFileSync(game, '#!/bin/sh\nsleep 30\n');
     fs.chmodSync(game, 0o755);

@@ -132,8 +132,9 @@ describe('profiles and sessions', () => {
   });
 
   posixOnly('launches an executable game once and skips it when already running', async () => {
-    const game = fakeGame(dir, 'drift-game');
-    const saved = ok(await core.invoke('profiles.save', { profile: profile({ obs: { sceneName: null, startReplayBuffer: false, startRecording: false }, audioPreset: null, game: { kind: 'executable', path: game, args: [], processName: 'drift-game' } }) }));
+    const procName = `dg${process.pid % 100000}${Date.now() % 1000}`; // unique: Linux truncates comm to 15 chars
+    const game = fakeGame(dir, procName);
+    const saved = ok(await core.invoke('profiles.save', { profile: profile({ obs: { sceneName: null, startReplayBuffer: false, startRecording: false }, audioPreset: null, game: { kind: 'executable', path: game, args: [], processName: procName } }) }));
     const s1 = ok(await core.invoke('sessions.start', { profileId: saved.id }));
     const a1 = await waitFor(async () => {
       const s = ok(await core.invoke('sessions.get', { id: s1.id }));

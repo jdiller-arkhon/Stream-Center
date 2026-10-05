@@ -48,7 +48,7 @@ const { FakeObs } = require(path.join(tmp, 'fakeObs.cjs'));
 let replayN = 0;
 const obs = new FakeObs({ password: 'hunter2', onSaveReplay: () => clip(path.join(tmp, 'obs', `Replay ${++replayN}.mp4`), 6) });
 const port = await obs.start();
-const game = path.join(tmp, 'games', 'drift-game');
+const game = path.join(tmp, 'games', `e2e-game-${process.pid % 10000}`);
 fs.mkdirSync(path.dirname(game), { recursive: true });
 fs.writeFileSync(game, `#!/bin/sh\necho launched > "${game}.marker"\nsleep 60\n`);
 fs.chmodSync(game, 0o755);
@@ -127,7 +127,7 @@ try {
   await page.locator('.highlight-card').first().waitFor({ timeout: 30000 });
   const cardText = await page.locator('.highlight-card').first().innerText();
   check('Save Replay indexes the real OBS file as a highlight', cardText.includes('Replay 1.mp4'), cardText.replace(/\s+/g, ' ').slice(0, 80));
-  check('highlight is tagged with the game from the profile', cardText.includes('drift-game') && !cardText.includes('Choose a game'));
+  check('highlight is tagged with the game from the profile', cardText.includes(path.basename(game)) && !cardText.includes('Choose a game'));
   check('highlight shows a real thumbnail', await page.locator('.highlight-card img').first().evaluate((img) => img.complete && img.naturalWidth > 0).catch(() => false));
   await page.screenshot({ path: path.join(shots, 'desktop-command-center.png') });
 
