@@ -3,7 +3,7 @@
  * allow-listed invoke/on. No Node, no ipcRenderer, no arbitrary channels.
  */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import { CONTRACT_VERSION_FOR_PRELOAD, EVENT_ALLOWLIST, IPC_CHANNELS, METHOD_ALLOWLIST } from '../shared/channels';
+import { CONTRACT_VERSION_FOR_PRELOAD, EVENT_ALLOWLIST, IPC_CHANNELS, METHOD_ALLOWLIST } from '../services/contract/channels';
 
 const methods = new Set<string>(METHOD_ALLOWLIST);
 const events = new Set<string>(EVENT_ALLOWLIST);

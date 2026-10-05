@@ -1,4 +1,4 @@
-import type { AudioSource } from '../../shared/contracts';
+import type { AudioSource } from '../contract/dto';
 import { fail } from '../core/errors';
 import type { EventBus } from '../core/events';
 import type { Logger } from '../core/logger';

@@ -1,6 +1,6 @@
 import path from 'node:path';
-import { Settings, type SettingsPatch } from '../../shared/contracts';
-import { defaultSettings } from '../../shared/defaults';
+import { Settings, type SettingsPatch } from '../contract/dto';
+import { defaultSettings } from '../contract/defaults';
 import { kvGet, kvSet, type Db } from '../core/database';
 import { fail } from '../core/errors';
 import { safeAbsolutePath } from '../core/paths';

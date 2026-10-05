@@ -1,6 +1,6 @@
 // Pin the JSON wire format (the package root resolves to msgpack under Node).
 import OBSWebSocket, { EventSubscription } from 'obs-websocket-js/json';
-import type { AudioMeters, ConnectionStatus, DriftError, ObsPreview, ObsState, ObsStats } from '../../shared/contracts';
+import type { AudioMeters, ConnectionStatus, DriftError, ObsPreview, ObsState, ObsStats } from '../contract/dto';
 import { DriftFailure, fail } from '../core/errors';
 import type { EventBus } from '../core/events';
 import { newId, nowIso } from '../core/ids';

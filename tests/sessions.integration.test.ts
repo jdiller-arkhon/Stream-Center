@@ -2,7 +2,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { SessionProfileInput } from '../src/shared/contracts';
+import type { SessionProfileInput } from '../src/services/contract/dto';
 import type { DriftCore } from '../src/services/DriftCore';
 import { FakeObs } from './helpers/fakeObs';
 import { generateClip, makeCore, ok, tempDir, waitFor, type TestPlatform } from './helpers/env';

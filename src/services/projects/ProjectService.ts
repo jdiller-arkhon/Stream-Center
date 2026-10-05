@@ -1,5 +1,5 @@
-import { EditProject, type ProjectSummary } from '../../shared/contracts';
-import { DEFAULT_CAPTION_STYLE, EXPORT_PRESETS } from '../../shared/defaults';
+import { EditProject, type ProjectSummary } from '../contract/dto';
+import { DEFAULT_CAPTION_STYLE, EXPORT_PRESETS } from '../contract/defaults';
 import type { Db } from '../core/database';
 import { fail } from '../core/errors';
 import { newId, nowIso } from '../core/ids';

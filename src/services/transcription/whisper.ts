@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { Caption } from '../../shared/contracts';
+import type { Caption } from '../contract/dto';
 import { DriftFailure, fail } from '../core/errors';
 import { newId } from '../core/ids';
 import { isFile } from '../core/paths';

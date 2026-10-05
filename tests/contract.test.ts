@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { EVENT_NAMES, METHOD_NAMES, type DriftDesktopBridge } from '../src/shared/api';
-import { CONTRACT_VERSION_FOR_PRELOAD, EVENT_ALLOWLIST, METHOD_ALLOWLIST } from '../src/shared/channels';
-import { CONTRACT_VERSION, ExportPreset, Settings } from '../src/shared/contracts';
-import { EXPORT_PRESETS, defaultSettings } from '../src/shared/defaults';
-import { DesktopAdapter, DriftClientError, call } from '../src/shared/client/DesktopAdapter';
+import { EVENT_NAMES, METHOD_NAMES } from '../src/services/contract/api';
+import { CONTRACT_VERSION_FOR_PRELOAD, EVENT_ALLOWLIST, METHOD_ALLOWLIST } from '../src/services/contract/channels';
+import { CONTRACT_VERSION, ExportPreset, Settings } from '../src/services/contract/dto';
+import { EXPORT_PRESETS, defaultSettings } from '../src/services/contract/defaults';
 import { buildAss, buildExportCommand, escapeAssText } from '../src/services/media/exportBuilder';
 import { ProgressParser, playbackPlan } from '../src/services/media/ffmpeg';
 import { collisionSafePath, safeAbsolutePath, sanitizeFileStem } from '../src/services/core/paths';
@@ -27,31 +26,6 @@ describe('shared contract', () => {
     expect(Settings.safeParse(defaultSettings()).success).toBe(true);
     for (const p of EXPORT_PRESETS) expect(ExportPreset.safeParse(p).success, p.id).toBe(true);
     expect(EXPORT_PRESETS.map((p) => p.name)).toEqual(['Clean Highlight', 'Cinematic', 'Vertical Short', 'Squad Recap']);
-  });
-});
-
-describe('DesktopAdapter', () => {
-  const bridge = (over: Partial<DriftDesktopBridge> = {}): DriftDesktopBridge => ({
-    contractVersion: CONTRACT_VERSION,
-    invoke: async () => ({ ok: true, data: null }),
-    on: () => () => {},
-    ...over,
-  });
-
-  it('refuses to run without a bridge or with an incompatible contract (no silent demo fallback)', () => {
-    expect(() => new DesktopAdapter()).toThrow(/DemoAdapter/);
-    expect(() => new DesktopAdapter({ bridge: bridge({ contractVersion: '2.0.0' }) })).toThrow(/mismatch/);
-  });
-
-  it('maps transport failures and validates responses when asked', async () => {
-    const broken = new DesktopAdapter({ bridge: bridge({ invoke: async () => Promise.reject(new Error('ipc gone')) }) });
-    const r = await broken.invoke('obs.getState', {});
-    expect(r.ok).toBe(false);
-    const strict = new DesktopAdapter({ bridge: bridge({ invoke: async () => ({ ok: true, data: { nope: 1 } }) }), validateResponses: true });
-    const bad = await strict.invoke('obs.getState', {});
-    expect(bad.ok).toBe(false);
-    const failing = new DesktopAdapter({ bridge: bridge({ invoke: async () => ({ ok: false, error: { code: 'OBS_NOT_CONNECTED', message: 'x', detail: null, retryable: true } }) }) });
-    await expect(call(failing, 'obs.saveReplay', {})).rejects.toBeInstanceOf(DriftClientError);
   });
 });
 

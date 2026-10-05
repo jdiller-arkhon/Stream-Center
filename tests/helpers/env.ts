@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { PickPathRequest } from '../../src/shared/contracts';
+import type { PickPathRequest } from '../../src/services/contract/dto';
 import { DriftCore, type CoreOptions } from '../../src/services/DriftCore';
 import { MemorySecretStore, type Platform } from '../../src/services/core/platform';
 

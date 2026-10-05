@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { PreflightCheck, Session, SessionEvent, SessionProfile, SessionStep } from '../../shared/contracts';
+import type { PreflightCheck, Session, SessionEvent, SessionProfile, SessionStep } from '../contract/dto';
 import type { AudioService } from '../audio/AudioService';
 import type { Db } from '../core/database';
 import { DriftFailure, fail, toDriftError } from '../core/errors';

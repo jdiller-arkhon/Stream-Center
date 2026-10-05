@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "src/main",
+    "src/preload",
+    "src/services/contract",
+    "src/services/core",
+    "src/services/DriftCore.ts",
+    "src/services/audio",
+    "src/services/jobs",
+    "src/services/library",
+    "src/services/media",
+    "src/services/obs",
+    "src/services/projects",
+    "src/services/sessions",
+    "src/services/settings",
+    "src/services/transcription",
+    "src/shared",
+    "tests/**/*.ts"
+  ]
+}

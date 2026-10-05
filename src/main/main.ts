@@ -6,8 +6,8 @@ import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, protocol, sa
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { IPC_CHANNELS } from '../shared/channels';
-import type { PickPathRequest } from '../shared/contracts';
+import { IPC_CHANNELS } from '../services/contract/channels';
+import type { PickPathRequest } from '../services/contract/dto';
 import { DriftCore } from '../services/DriftCore';
 import type { Platform, SecretStore } from '../services/core/platform';
 import { MemorySecretStore } from '../services/core/platform';
@@ -152,7 +152,7 @@ const MIME: Record<string, string> = {
 };
 
 function rendererRoot(): { dir: string; fallback: boolean } {
-  const built = path.join(app.getAppPath(), 'dist', 'renderer');
+  const built = path.join(app.getAppPath(), 'dist');
   if (fs.existsSync(path.join(built, 'index.html'))) return { dir: built, fallback: false };
   return { dir: path.join(__dirname, 'fallback'), fallback: true };
 }

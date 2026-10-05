@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import type { EventName, EventPayload } from '../../shared/api';
+import type { EventName, EventPayload } from '../contract/api';
 
 /** Typed in-process bus. The main process forwards every event to renderer windows. */
 export class EventBus {

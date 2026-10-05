@@ -44,7 +44,7 @@ import {
   Waveform,
   type DriftError,
   type Result,
-} from './contracts';
+} from './dto';
 
 const Empty = z.object({}).strict();
 const Void = z.null();

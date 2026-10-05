@@ -1,4 +1,4 @@
-import type { Job } from '../../shared/contracts';
+import type { Job } from '../contract/dto';
 import type { Db } from '../core/database';
 import { DriftFailure, fail, toDriftError } from '../core/errors';
 import type { EventBus } from '../core/events';

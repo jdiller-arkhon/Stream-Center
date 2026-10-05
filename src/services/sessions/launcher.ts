@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { GameLaunch, ValidationIssue } from '../../shared/contracts';
+import type { GameLaunch, ValidationIssue } from '../contract/dto';
 import { fail } from '../core/errors';
 import { isFile } from '../core/paths';
 import { launchDetached, run } from '../core/proc';

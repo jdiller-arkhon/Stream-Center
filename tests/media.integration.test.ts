@@ -2,8 +2,8 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { EditProject, ExportSettings, Job } from '../src/shared/contracts';
-import { EXPORT_PRESETS } from '../src/shared/defaults';
+import type { EditProject, ExportSettings, Job } from '../src/services/contract/dto';
+import { EXPORT_PRESETS } from '../src/services/contract/defaults';
 import type { DriftCore } from '../src/services/DriftCore';
 import { generateClip, makeCore, ok, tempDir, waitFor } from './helpers/env';
 

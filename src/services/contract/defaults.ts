@@ -1,4 +1,4 @@
-import type { CaptionStyle, ExportPreset, Settings } from './contracts';
+import type { CaptionStyle, ExportPreset, Settings } from './dto';
 
 export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
   fontFamily: 'Segoe UI',

@@ -1,4 +1,4 @@
-import type { Shortcut, ShortcutAction, ShortcutStatus } from '../../shared/contracts';
+import type { Shortcut, ShortcutAction, ShortcutStatus } from '../contract/dto';
 import type { Logger } from '../core/logger';
 import type { ShortcutHost } from '../core/platform';
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { ExportRequest, ExportSettings } from '../../shared/contracts';
+import type { ExportRequest, ExportSettings } from '../contract/dto';
 import { DriftFailure, fail } from '../core/errors';
 import type { Logger } from '../core/logger';
 import { collisionSafePath, diskStatus, isFile, sanitizeFileStem } from '../core/paths';

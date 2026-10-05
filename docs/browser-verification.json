@@ -1,0 +1,12 @@
+{
+  "checks": 38,
+  "errors": [],
+  "viewports": [
+    "1920×1080",
+    "1440×900",
+    "1024×768",
+    "390×844"
+  ],
+  "browser": "Chromium 134 / Playwright 1.51.1",
+  "scope": "Browser demo only"
+}

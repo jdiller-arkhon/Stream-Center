@@ -1,19 +1,29 @@
 {
   "compilerOptions": {
-    "target": "ES2023",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "module": "preserve",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "exactOptionalPropertyTypes": false,
-    "esModuleInterop": true,
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
     "skipLibCheck": true,
-    "isolatedModules": true,
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
+    "isolatedModules": true,
     "noEmit": true,
-    "types": ["node"]
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
   },
-  "include": ["src/main", "src/preload", "src/services", "src/shared", "tests", "scripts"]
+  "include": [
+    "src/renderer",
+    "src/shared",
+    "src/services/DemoAdapter.ts",
+    "src/services/DesktopAdapter.ts",
+    "src/services/fixtures.ts",
+    "vite.config.ts"
+  ]
 }

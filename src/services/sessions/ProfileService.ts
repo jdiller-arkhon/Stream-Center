@@ -1,4 +1,4 @@
-import { SessionProfile, type SessionProfileInput, type ValidationIssue } from '../../shared/contracts';
+import { SessionProfile, type SessionProfileInput, type ValidationIssue } from '../contract/dto';
 import type { Db } from '../core/database';
 import { fail } from '../core/errors';
 import { newId, nowIso } from '../core/ids';

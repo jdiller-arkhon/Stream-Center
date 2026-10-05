@@ -1,4 +1,4 @@
-import type { DriftError, ErrorCode } from '../../shared/contracts';
+import type { DriftError, ErrorCode } from '../contract/dto';
 
 /** Exception carrying a contract-level DriftError. Thrown by services, mapped to Result at IPC boundary. */
 export class DriftFailure extends Error {

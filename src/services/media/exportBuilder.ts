@@ -1,4 +1,4 @@
-import type { CaptionStyle, EditProject, ExportSettings, NormRect } from '../../shared/contracts';
+import type { CaptionStyle, EditProject, ExportSettings, NormRect } from '../contract/dto';
 import { fail } from '../core/errors';
 
 export interface ClipMediaInfo {

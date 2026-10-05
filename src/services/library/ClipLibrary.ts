@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import type { SQLInputValue } from 'node:sqlite';
 import path from 'node:path';
-import type { ClipAsset, ClipImportResult, ClipQuery, Waveform } from '../../shared/contracts';
+import type { ClipAsset, ClipImportResult, ClipQuery, Waveform } from '../contract/dto';
 import type { Db } from '../core/database';
 import { DriftFailure, fail, toDriftError } from '../core/errors';
 import type { EventBus } from '../core/events';

@@ -1,4 +1,4 @@
-import type { PickPathRequest } from '../../shared/contracts';
+import type { PickPathRequest } from '../contract/dto';
 
 /**
  * Everything the services need from the host (Electron in production, fakes in tests).

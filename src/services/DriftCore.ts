@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { z } from 'zod';
-import { methods, type MethodInput, type MethodName, type MethodOutput } from '../shared/api';
-import { CONTRACT_VERSION, type Capabilities, type Notice, type ShortcutAction, type StatusStrip, type Telemetry } from '../shared/contracts';
-import { EXPORT_PRESETS } from '../shared/defaults';
+import { methods, type MethodInput, type MethodName, type MethodOutput } from './contract/api';
+import { CONTRACT_VERSION, type Capabilities, type Notice, type ShortcutAction, type StatusStrip, type Telemetry } from './contract/dto';
+import { EXPORT_PRESETS } from './contract/defaults';
 import { AudioService } from './audio/AudioService';
 import { openDatabase, type Db } from './core/database';
 import { DriftFailure, fail, toDriftError } from './core/errors';
@@ -23,7 +23,7 @@ import { SessionService } from './sessions/SessionService';
 import { SettingsService } from './settings/SettingsService';
 import { ShortcutService } from './settings/ShortcutService';
 import { createTranscriptionHandler, type TranscriptionPayload } from './transcription/whisper';
-import type { Result } from '../shared/contracts';
+import type { Result } from './contract/dto';
 
 export interface CoreOptions {
   platform: Platform;
