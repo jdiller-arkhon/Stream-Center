@@ -39,6 +39,14 @@ Status date: 2026-10-05. Branch: `claude/wizardly-johnson-9f4gfl`.
   - **Guards:** one generation at a time; refused while streaming (it saturates the GPU and would drop viewers' frames); aborted on app close; out-of-memory explained.
   - **Ops (desktop only):** `thumbAiStatus`, `thumbAiConfigure`, `thumbAiPick`, `generateThumbnail`, `cancelThumbnail`. Config is stored in kv `ui.thumbAi`; the UI only sees file names.
   - **Verified here:** a real stable-diffusion.cpp build (CPU) generated an image from SD-Turbo (Q8 GGUF) in about 30 s with these flags. The automated tests use a fake `sd-cli` and a fake WebUI server, both returning real PNGs. Not bundled: engine builds are GPU-specific and models are 2–7 GB with their own licences, so the user downloads both.
+- **Thumbnail compositor** (`src/renderer/thumbCanvas.ts`, renderer only):
+  - **Looks:** 8 presets combining font, colours, text effects and background treatment.
+  - **Colour grades** use canvas filters plus blend fills.
+  - **Background passes:** vignette, speed lines aimed at the first layer, scanlines, glitch (slice displacement with an RGB fringe) and film grain. A seeded PRNG keeps them identical across redraws.
+  - **Text:** glow, gradient, slant, 3D extrude and RGB split.
+  - **Draggable graphics:** arrow, circle, badge and burst.
+  - **Cut-outs:** neon glow outline in any colour.
+  - **Fonts:** display faces from @fontsource (Anton, Bebas Neue, Bangers, Black Ops One under OFL-1.1; Permanent Marker under Apache-2.0), latin subset, bundled.
 - **CI** (`.github/workflows/frontend.yml`): two jobs. *Renderer* runs the lockfile check, build, contract tests and the browser demo. *Desktop* installs FFmpeg/Xvfb/flite first, then typechecks, runs the service tests, builds, fetches the voice model and runs the Electron end-to-end suite. Earlier runs failed because the service tests ran before FFmpeg was installed. A vitest global setup now fails fast with a clear message when FFmpeg is missing.
 - **Logo.** The supplied drift logo is redrawn as vector artwork (`src/renderer/components/Logo.tsx`): brand gradient in the sidebar, white on the hero, plus `public/favicon.svg` and `build/icon.png`/`icon.svg` for the installer.
 
@@ -207,8 +215,8 @@ npm run dist:win           # NSIS installer → release/ (run on Windows)
 
 | Suite | Result | What it proves |
 | --- | --- | --- |
-| `npm run test:e2e` | **56/56** | Real Electron app, real built UI, clicked through every function. It checks both what the UI shows and the real effect behind it. |
-| `npm run test:services` | **74/74** | Services and `StudioBridge` against a fake obs-websocket v5 server and real FFmpeg. Every snapshot and response passes the renderer's own validators. |
+| `npm run test:e2e` | **64/64** | Real Electron app, real built UI, clicked through every function. It checks both what the UI shows and the real effect behind it. |
+| `npm run test:services` | **80/80** | Services and `StudioBridge` against a fake obs-websocket v5 server and real FFmpeg. Every snapshot and response passes the renderer's own validators. |
 | `npm run test:renderer` | **14/14** | ChatGPT's contract and adapter tests. |
 | `npm run test:browser` | **37/37** | ChatGPT's browser demo suite: layouts, overflow, focus, keyboard and dialogs, run with the new theme. |
 | `npm run typecheck` | clean | Renderer and desktop configs (TypeScript 7). |

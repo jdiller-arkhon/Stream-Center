@@ -4,9 +4,11 @@ import { Badge, Button, Empty, Field } from '../components/Primitives';
 import { Icon } from '../components/Icon';
 import { THUMB_STYLE_OPTIONS, type ThumbAiStatus, type YouTubeKit } from '../../shared/contracts';
 import { suggestDescription } from '../thumbPrompts';
-import { cutOut, drawThumbnail, exportJpeg, FONTS, H, readImageFile, W, type FontKey, type Layer, type Rect, type TextPlace } from '../thumbCanvas';
+import { cutOut, drawThumbnail, exportJpeg, FONTS, H, NO_FX, readImageFile, VIBES, W, type BackgroundFx, type Decal, type FontKey, type Grade, type Layer, type Rect, type TextPlace } from '../thumbCanvas';
 
-const ACCENTS = [['Mist', '#7c5cff'], ['Gold', '#ffc83d'], ['Ice', '#2fd3f0'], ['Ember', '#ff5a4e'], ['Lime', '#9be22d']] as const;
+const ACCENTS = [['Mist', '#7c5cff'], ['Gold', '#ffc83d'], ['Ice', '#2fd3f0'], ['Ember', '#ff5a4e'], ['Lime', '#9be22d'], ['Blood', '#ff1a1a'], ['Magenta', '#ff2bd6']] as const;
+const GRADES: Array<[Grade, string]> = [['none', 'None'], ['punch', 'Punchy'], ['noir', 'Noir'], ['teal-orange', 'Teal & orange'], ['duotone', 'Duotone (accent)'], ['blood', 'Blood red'], ['toxic', 'Toxic green']];
+const DECALS: Array<[Decal['kind'], string]> = [['arrow', 'Arrow'], ['circle', 'Circle'], ['badge', 'Badge'], ['burst', 'Burst']];
 const RECENT_KEY = 'drift.thumbPrompts';
 const QUALITY = [['fast', 'Fast'], ['balanced', 'Balanced'], ['best', 'Best']] as const;
 type Quality = typeof QUALITY[number][0];
@@ -28,6 +30,17 @@ export function ThumbnailStudio({ jobId, kit }: { jobId: string; kit: YouTubeKit
     const [color, setColor] = useState('#ffffff');
     const [accent, setAccent] = useState<string>(ACCENTS[0][1]);
     const [upper, setUpper] = useState(true);
+    const [gradientTo, setGradientTo] = useState<string | null>(null);
+    const [glow, setGlow] = useState(false);
+    const [slant, setSlant] = useState(0);
+    const [extrude, setExtrude] = useState(false);
+    const [split, setSplit] = useState(false);
+    const [bar, setBar] = useState(true);
+    const [scale, setScale] = useState(1);
+    const [fx, setFx] = useState<BackgroundFx>(NO_FX);
+    const [vibe, setVibe] = useState('clean');
+    const [decals, setDecals] = useState<Decal[]>([]);
+    const [activeDecal, setActiveDecal] = useState<string | null>(null);
     // AI
     const [ai, setAi] = useState<ThumbAiStatus | null>(null);
     const [prompt, setPrompt] = useState('');
@@ -46,7 +59,7 @@ export function ThumbnailStudio({ jobId, kit }: { jobId: string; kit: YouTubeKit
     const homePreview = useRef<HTMLCanvasElement>(null);
     const phonePreview = useRef<HTMLCanvasElement>(null);
     const rects = useRef(new Map<string, Rect>());
-    const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
+    const drag = useRef<{ id: string; dx: number; dy: number; kind: 'decal' | 'layer' } | null>(null);
     const bgInput = useRef<HTMLInputElement>(null);
     const layerInput = useRef<HTMLInputElement>(null);
 
@@ -57,31 +70,59 @@ export function ThumbnailStudio({ jobId, kit }: { jobId: string; kit: YouTubeKit
         const c = canvas.current;
         if (!c || !selected) return;
         let live = true;
-        void drawThumbnail(c, selected.src, { text, place, font, color, accent, upper }, layers).then(r => {
+        void drawThumbnail(c, { background: selected.src, text: { text, place, font, color, accent, upper, gradientTo, glow, slant, extrude, split, bar, scale }, layers, fx, decals }).then(r => {
             if (!live) return;
             rects.current = r;
             for (const p of [homePreview.current, phonePreview.current]) p?.getContext('2d')?.drawImage(c, 0, 0, p.width, p.height);
         }).catch(() => notify('Could not draw the thumbnail preview'));
         return () => { live = false; };
-    }, [selected, text, place, font, color, accent, upper, layers, notify]);
+    }, [selected, text, place, font, color, accent, upper, gradientTo, glow, slant, extrude, split, bar, scale, layers, fx, decals, notify]);
 
     const updateLayer = useCallback((id: string, change: Partial<Layer>) => setLayers(x => x.map(l => l.id === id ? { ...l, ...change } : l)), []);
+    const updateDecal = useCallback((id: string, change: Partial<Decal>) => setDecals(x => x.map(d => d.id === id ? { ...d, ...change } : d)), []);
+    const setFxPart = (change: Partial<BackgroundFx>) => { setFx(f => ({ ...f, ...change })); setVibe('custom'); };
+    const applyVibe = (key: string) => {
+        const v = VIBES.find(x => x.key === key);
+        if (!v) return;
+        setVibe(key);
+        const t = v.text;
+        if (t.font) setFont(t.font);
+        if (t.color) setColor(t.color);
+        if (t.accent) setAccent(t.accent);
+        setGradientTo(t.gradientTo ?? null);
+        setGlow(!!t.glow); setSlant(t.slant ?? 0); setExtrude(!!t.extrude); setSplit(!!t.split); setBar(t.bar !== false);
+        setFx({ ...NO_FX, ...v.fx });
+        // Cut-outs follow the look: neon looks glow in the accent colour.
+        setLayers(x => x.map(l => ({ ...l, outlineColor: key === 'neon' || key === 'glitch' || key === 'toxic' ? t.accent : '#ffffff', glow: key === 'neon' || key === 'glitch' || key === 'toxic' })));
+    };
+    const addDecal = (kind: Decal['kind']) => {
+        const id = `decal-${Date.now()}`;
+        const d: Decal = { id, kind, cx: kind === 'badge' ? 0.8 : 0.62, cy: kind === 'badge' ? 0.16 : 0.5, size: kind === 'arrow' ? 0.22 : kind === 'badge' ? 0.2 : 0.4, rot: kind === 'arrow' ? 200 : kind === 'badge' ? -6 : 0, color: kind === 'circle' || kind === 'arrow' ? '#ff1a1a' : kind === 'burst' ? '#ffe11a' : accent, text: kind === 'badge' ? 'INSANE' : kind === 'burst' ? 'WOW' : '' };
+        setDecals(x => [...x, d]);
+        setActiveDecal(id);
+        setActiveLayer(null);
+    };
 
     // Drag layers directly on the preview.
     const toCanvas = (e: React.PointerEvent<HTMLCanvasElement>) => { const r = e.currentTarget.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; };
     const onDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
         const p = toCanvas(e);
-        const hit = [...layers].reverse().find(l => { const r = rects.current.get(l.id); return r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h; });
+        const inside = (id: string) => { const r = rects.current.get(id); return !!r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h; };
+        // Graphics sit on top of images, so they win the hit test.
+        const d = [...decals].reverse().find(x => inside(x.id));
+        const l = d ? undefined : [...layers].reverse().find(x => inside(x.id));
+        const hit = d ? { id: d.id, cx: d.cx, cy: d.cy, kind: 'decal' as const } : l ? { id: l.id, cx: l.cx, cy: l.cy, kind: 'layer' as const } : undefined;
         if (!hit) return;
         e.currentTarget.setPointerCapture(e.pointerId);
-        drag.current = { id: hit.id, dx: p.x - hit.cx * W, dy: p.y - hit.cy * H };
-        setActiveLayer(hit.id);
+        drag.current = { id: hit.id, dx: p.x - hit.cx * W, dy: p.y - hit.cy * H, kind: hit.kind };
+        if (hit.kind === 'decal') { setActiveDecal(hit.id); setActiveLayer(null); } else { setActiveLayer(hit.id); setActiveDecal(null); }
     };
     const onMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
         const d = drag.current;
         if (!d) return;
         const p = toCanvas(e);
-        updateLayer(d.id, { cx: Math.min(1.2, Math.max(-0.2, (p.x - d.dx) / W)), cy: Math.min(1.3, Math.max(-0.3, (p.y - d.dy) / H)) });
+        const pos = { cx: Math.min(1.2, Math.max(-0.2, (p.x - d.dx) / W)), cy: Math.min(1.3, Math.max(-0.3, (p.y - d.dy) / H)) };
+        if (d.kind === 'decal') updateDecal(d.id, pos); else updateLayer(d.id, pos);
     };
     const onUp = () => { drag.current = null; };
 
@@ -146,7 +187,8 @@ export function ThumbnailStudio({ jobId, kit }: { jobId: string; kit: YouTubeKit
         <input hidden type="file" accept="image/png,image/jpeg,image/webp" multiple ref={layerInput} onChange={e => void upload(e.target.files, 'layer')}/>
         <div className="yt-thumb">{selected ? <canvas ref={canvas} width={W} height={H} aria-label="Thumbnail preview" className={layers.length ? 'draggable' : ''} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}/> : <Empty icon="image" title="Choose a background" detail="Upload an image or describe one below."/>}</div>
         {selected && <div className="yt-size-previews" aria-label="Small-size previews"><figure><canvas ref={homePreview} width={320} height={180} aria-label="Preview at YouTube home size"/><figcaption>Home feed · 320×180</figcaption></figure><figure><canvas ref={phonePreview} width={168} height={94} aria-label="Preview at search and suggested size"/><figcaption>Search / up next · 168×94</figcaption></figure><p className="fine-print">Most viewers see your thumbnail this small. If the text is hard to read here, shorten it.</p></div>}
-        {layers.length > 0 && <p className="fine-print">Drag images on the preview to move them.</p>}
+        {selected && <div className="yt-vibes"><span>Look</span><div className="yt-style-chips" role="radiogroup" aria-label="Look">{VIBES.map(v => <button key={v.key} role="radio" aria-checked={vibe === v.key} className={`chip vibe-${v.key} ${vibe === v.key ? 'selected' : ''}`} onClick={() => applyVibe(v.key)}>{v.label}</button>)}{vibe === 'custom' && <span className="chip selected" aria-hidden="true">Custom</span>}</div></div>}
+        {(layers.length > 0 || decals.length > 0) && <p className="fine-print">Drag images and graphics on the preview to move them.</p>}
         <div className="yt-frames" role="radiogroup" aria-label="Thumbnail background">{backgrounds.map(b => <button key={b.id} role="radio" aria-checked={selected?.id === b.id} aria-label={b.label} title={b.ai ? `${b.ai.description} · seed ${b.ai.seed}` : b.label} className={selected?.id === b.id ? 'selected' : ''} onClick={() => setSelectedId(b.id)}><img src={b.src} alt=""/>{b.ai && <span className="yt-frame-tag">AI</span>}</button>)}</div>
         <div className="button-row"><Button icon="upload" variant="ghost" onClick={() => bgInput.current?.click()}>Upload background</Button><Button icon="plus" variant="ghost" onClick={() => layerInput.current?.click()}>Add image on top</Button>{selected?.ai && <Button icon="spark" variant="ghost" disabled={!ai?.ready || generating} onClick={() => void generate({ from: selected, variation: true })}>More like this</Button>}</div>
 
@@ -174,17 +216,51 @@ export function ThumbnailStudio({ jobId, kit }: { jobId: string; kit: YouTubeKit
             <button className="icon-button" aria-label={`Remove ${l.name}`} onClick={() => setLayers(x => x.filter(y => y.id !== l.id))}><Icon name="close" size={14}/></button>
         </div>)}
             {active && <div className="yt-layer-tools"><span>{active.name}</span><div className="button-row">{(['left', 'center', 'right'] as const).map(p => <Button key={p} variant="ghost" onClick={() => updateLayer(active.id, { cx: p === 'left' ? 0.22 : p === 'right' ? 0.78 : 0.5, cy: 1 - active.size / 2 })}>{p === 'center' ? 'Centre' : p[0]!.toUpperCase() + p.slice(1)}</Button>)}<Button variant="ghost" disabled={layers[layers.length - 1]?.id === active.id} onClick={() => setLayers(x => [...x.filter(y => y.id !== active.id), active])}>Bring to front</Button></div>
+                <div className="button-row"><label className="compact-toggle">Outline colour <input type="color" aria-label={`Outline colour of ${active.name}`} value={active.outlineColor ?? '#ffffff'} onChange={e => updateLayer(active.id, { outlineColor: e.target.value })}/></label><label className="compact-toggle"><input type="checkbox" aria-label={`Glow ${active.name}`} checked={!!active.glow} onChange={e => updateLayer(active.id, { glow: e.target.checked })}/>Neon glow</label></div>
                 <div className="yt-cutout"><Field label={`Remove plain background · tolerance ${Math.round(tolerance * 100)}%`}><input type="range" aria-label="Background tolerance" min="0.05" max="0.45" step="0.01" value={tolerance} onChange={e => setTolerance(Number(e.target.value))}/></Field><Button variant="ghost" onClick={() => void removeBackgroundOf(active)}>Remove background</Button>{active.original && <Button variant="ghost" onClick={() => updateLayer(active.id, { src: active.original!, original: undefined })}>Restore original</Button>}</div>
                 <p className="fine-print">Removes a plain wall or green screen around the edges. For busy photos, use an image that is already cut out (transparent PNG).</p></div>}
         </div>}
 
+        <div className="yt-panel" aria-label="Graphics"><div className="yt-panel-head"><strong>Graphics</strong><div className="button-row">{DECALS.map(([k, label]) => <Button key={k} icon="plus" variant="ghost" onClick={() => addDecal(k)}>{label}</Button>)}</div></div>
+            {decals.map(d => <div key={d.id} className={`yt-decal ${d.id === activeDecal ? 'active' : ''}`} onClick={() => { setActiveDecal(d.id); setActiveLayer(null); }}>
+                <strong>{DECALS.find(x => x[0] === d.kind)![1]}</strong>
+                {(d.kind === 'badge' || d.kind === 'burst') && <input aria-label={`${d.kind} text`} maxLength={14} value={d.text} onChange={e => updateDecal(d.id, { text: e.target.value })}/>}
+                <input type="color" aria-label={`${d.kind} colour`} value={d.color} onChange={e => updateDecal(d.id, { color: e.target.value })}/>
+                <input type="range" aria-label={`${d.kind} size`} min="0.08" max="0.7" step="0.01" value={d.size} onChange={e => updateDecal(d.id, { size: Number(e.target.value) })}/>
+                <input type="range" aria-label={`${d.kind} rotation`} min="-180" max="360" step="5" value={d.rot} onChange={e => updateDecal(d.id, { rot: Number(e.target.value) })}/>
+                <button className="icon-button" aria-label={`Remove ${d.kind}`} onClick={() => setDecals(x => x.filter(y => y.id !== d.id))}><Icon name="close" size={14}/></button>
+            </div>)}
+        </div>
+
+        <div className="yt-panel" aria-label="Effects"><div className="yt-panel-head"><strong>Effects</strong></div>
+            <div className="form-grid">
+                <Field label="Colour grade"><select aria-label="Colour grade" value={fx.grade} onChange={e => setFxPart({ grade: e.target.value as Grade })}>{GRADES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
+                <Field label={`Vignette · ${Math.round(fx.vignette * 100)}%`}><input type="range" aria-label="Vignette" min="0" max="1" step="0.05" value={fx.vignette} onChange={e => setFxPart({ vignette: Number(e.target.value) })}/></Field>
+                <Field label={`Grain · ${Math.round(fx.grain * 100)}%`}><input type="range" aria-label="Grain" min="0" max="1" step="0.05" value={fx.grain} onChange={e => setFxPart({ grain: Number(e.target.value) })}/></Field>
+                <Field label={`Glitch · ${Math.round(fx.glitch * 100)}%`}><input type="range" aria-label="Glitch" min="0" max="1" step="0.05" value={fx.glitch} onChange={e => setFxPart({ glitch: Number(e.target.value) })}/></Field>
+            </div>
+            <div className="button-row"><label className="compact-toggle"><input type="checkbox" checked={fx.speedLines} onChange={e => setFxPart({ speedLines: e.target.checked })}/>Speed lines</label><label className="compact-toggle"><input type="checkbox" checked={fx.scanlines} onChange={e => setFxPart({ scanlines: e.target.checked })}/>Scanlines</label><label className="compact-toggle"><input type="checkbox" checked={fx.shade} onChange={e => setFxPart({ shade: e.target.checked })}/>Darken behind text</label></div>
+        </div>
+
         <div className="form-grid">
             <Field label="Thumbnail text"><input aria-label="Thumbnail text" maxLength={60} value={text} onChange={e => setText(e.target.value)} placeholder="Leave empty for a clean image"/></Field>
-            <Field label="Text placement"><select aria-label="Text placement" value={place} onChange={e => setPlace(e.target.value as TextPlace)}><option value="left">Left side</option><option value="right">Right side</option><option value="top">Top</option><option value="bottom">Bottom</option></select></Field>
+            <Field label="Text placement"><select aria-label="Text placement" value={place} onChange={e => setPlace(e.target.value as TextPlace)}><option value="left">Left side</option><option value="right">Right side</option><option value="top">Top</option><option value="bottom">Bottom</option><option value="center">Centre</option></select></Field>
             <Field label="Font"><select aria-label="Font" value={font} onChange={e => setFont(e.target.value as FontKey)}>{(Object.keys(FONTS) as FontKey[]).map(k => <option key={k} value={k}>{FONTS[k].label}</option>)}</select></Field>
             <Field label="Text colour"><input type="color" aria-label="Text colour" value={color} onChange={e => setColor(e.target.value)}/></Field>
         </div>
-        <label className="toggle"><input type="checkbox" checked={upper} onChange={e => setUpper(e.target.checked)}/>All capitals</label>
+        <div className="yt-text-fx" aria-label="Text effects">
+            <label className="compact-toggle"><input type="checkbox" checked={upper} onChange={e => setUpper(e.target.checked)}/>All capitals</label>
+            <label className="compact-toggle"><input type="checkbox" checked={glow} onChange={e => { setGlow(e.target.checked); setVibe('custom'); }}/>Glow</label>
+            <label className="compact-toggle"><input type="checkbox" checked={extrude} onChange={e => { setExtrude(e.target.checked); setVibe('custom'); }}/>3D</label>
+            <label className="compact-toggle"><input type="checkbox" checked={split} onChange={e => { setSplit(e.target.checked); setVibe('custom'); }}/>RGB split</label>
+            <label className="compact-toggle"><input type="checkbox" checked={bar} onChange={e => setBar(e.target.checked)}/>Accent bar</label>
+            <label className="compact-toggle"><input type="checkbox" checked={gradientTo !== null} onChange={e => { setGradientTo(e.target.checked ? '#ff8a00' : null); setVibe('custom'); }}/>Gradient</label>
+            {gradientTo !== null && <input type="color" aria-label="Gradient colour" value={gradientTo} onChange={e => setGradientTo(e.target.value)}/>}
+        </div>
+        <div className="form-grid">
+            <Field label={`Slant · ${Math.round(slant * 100)}%`}><input type="range" aria-label="Slant" min="0" max="0.35" step="0.01" value={slant} onChange={e => setSlant(Number(e.target.value))}/></Field>
+            <Field label={`Text size · ${Math.round(scale * 100)}%`}><input type="range" aria-label="Text size" min="0.7" max="1.4" step="0.05" value={scale} onChange={e => setScale(Number(e.target.value))}/></Field>
+        </div>
         <div className="yt-accents" role="radiogroup" aria-label="Accent colour">{ACCENTS.map(([name, c]) => <button key={c} role="radio" aria-checked={accent === c} aria-label={name} className={accent === c ? 'selected' : ''} style={{ background: c }} onClick={() => setAccent(c)}/>)}</div>
         <div className="button-row"><Button icon="image" disabled={!selected || pending.has('saveThumbnail')} onClick={() => void save()}>Save thumbnail (1280×720)</Button></div>
         <p className="fine-print">Save several versions to compare them with YouTube Studio's thumbnail test.</p>

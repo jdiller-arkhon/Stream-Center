@@ -136,7 +136,7 @@ export function validateRequest(op: Operation, input: unknown): void {
             number(p.strength, 0.1, 1, 'strength');
             one(p.count, [1, 2, 3, 4], 'image count');
             if (p.style !== undefined)
-                one(p.style, ['none', 'cinematic', 'neon', 'anime', 'comic', 'photo', 'fantasy', 'horror', 'minimal', '3d'], 'style');
+                one(p.style, ['none', 'cinematic', 'neon', 'anime', 'comic', 'photo', 'fantasy', 'horror', 'minimal', '3d', 'cyberpunk', 'dark', 'grunge', 'glitch'], 'style');
             if (p.avoid !== undefined)
                 str(p.avoid, 'avoid', 300);
             if (p.quality !== undefined)

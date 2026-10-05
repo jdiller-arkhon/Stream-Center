@@ -6,6 +6,12 @@ import { DemoAdapter } from '../services/DemoAdapter';
 import { DesktopAdapter } from '../services/DesktopAdapter';
 import '@fontsource-variable/plus-jakarta-sans';
 import '@fontsource-variable/jetbrains-mono';
+// Display faces for thumbnails (latin only, bundled: no network).
+import '@fontsource/anton/latin-400.css';
+import '@fontsource/bebas-neue/latin-400.css';
+import '@fontsource/bangers/latin-400.css';
+import '@fontsource/black-ops-one/latin-400.css';
+import '@fontsource/permanent-marker/latin-400.css';
 import './styles.css';
 import './theme-mist-base.css';
 import './theme-mist.css';

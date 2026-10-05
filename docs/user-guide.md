@@ -37,6 +37,15 @@ Turn on in **Settings → Shortcuts**. Everything runs offline on your PC; no au
     - recent descriptions.
     - Images on top can be dragged on the preview, outlined, shadowed, brought to front, and have a plain or green-screen background removed (and restored).
     - Text: font, colour, placement (left, right, top, bottom) and capitals.
+    - **Looks** (one click): Clean, Rage, Neon rift, Toxic, Blackout, Hype, Glitch, Grunge. Each sets the font, colours, text effects and background treatment, and you can tweak any of it afterwards.
+    - **Effects:**
+      - colour grades: punchy, noir, teal & orange, duotone, blood red, toxic green;
+      - vignette, film grain, glitch, speed lines and scanlines.
+    - **Text effects:** glow, gradient, 3D extrude, RGB split, slant, size, centre placement.
+    - **Display fonts:** Anton, Bebas Neue, Bangers, Black Ops One and Permanent Marker, all bundled so they work offline.
+    - **Graphics:** arrows, circles, badges (e.g. "1V5") and bursts. Drag, recolour, resize and rotate them.
+    - **Neon glow** around cut-outs, in any colour.
+    - Edgy AI styles: Cyberpunk, Dark & gritty, Grunge, Glitch.
     - Small previews show how the thumbnail looks on the YouTube home feed and in search.
   - **Open YouTube Studio** opens YouTube in your browser. Choose Create → Upload videos and drag in the file (**Show video in folder** finds it). Drift Studio never signs in or uploads for you.
 

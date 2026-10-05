@@ -296,6 +296,22 @@ try {
   const smallOk = await page.getByLabel('Preview at YouTube home size').evaluate((c) => c.getContext('2d').getImageData(0, 0, 320, 180).data.some((v, i) => i % 4 !== 3 && v > 0));
   check('small-size previews show the thumbnail at YouTube home and search sizes', smallOk);
   await page.getByLabel('Text placement').selectOption('left');
+  // Edgy looks: one click sets font, colours, text effects and the background treatment.
+  if (process.env.DRIFT_E2E_DEMO_BG) await page.locator('input[type=file]:not([multiple])[accept^="image/png"]').setInputFiles(process.env.DRIFT_E2E_DEMO_BG);
+  await page.getByRole('radio', { name: 'Rage', exact: true }).click();
+  check('the Rage look applies a condensed font, blood-red grade and vignette', (await page.getByLabel('Font').inputValue()) === 'anton' && (await page.getByLabel('Colour grade').inputValue()) === 'blood' && Number(await page.getByLabel('Vignette').inputValue()) > 0.5);
+  await page.locator('.yt-panel[aria-label="Graphics"]').getByRole('button', { name: 'Badge', exact: true }).click();
+  await page.getByLabel('badge text').fill('1V5');
+  await page.locator('.yt-panel[aria-label="Graphics"]').getByRole('button', { name: 'Arrow', exact: true }).click();
+  check('graphics (badge with text, arrow) are added and editable', (await page.locator('.yt-decal').count()) === 2 && (await page.getByLabel('badge text').inputValue()) === '1V5');
+  await page.waitForTimeout(600);
+  const look = await page.getByLabel('Thumbnail preview').evaluate((c) => { const d = c.getContext('2d').getImageData(0, 0, 1280, 720).data; let r = 0, g = 0; for (let i = 0; i < d.length; i += 400) { r += d[i]; g += d[i + 1]; } return { r, g }; });
+  check('the look visibly changes the image (red-dominant grade)', look.r > look.g * 1.3, JSON.stringify(look));
+  await page.getByLabel('Thumbnail preview').screenshot({ path: path.join(shots, 'desktop-thumbnail-rage.png') });
+  await page.getByRole('radio', { name: 'Neon rift', exact: true }).click();
+  await page.waitForTimeout(600);
+  check('the Neon rift look turns on glow, RGB split, glitch and scanlines', (await page.getByLabel('Font').inputValue()) === 'bebas' && Number(await page.getByLabel('Glitch').inputValue()) > 0 && await page.getByRole('checkbox', { name: 'Scanlines' }).isChecked() && await page.getByRole('checkbox', { name: 'RGB split' }).isChecked());
+  await page.getByLabel('Thumbnail preview').screenshot({ path: path.join(shots, 'desktop-thumbnail-neon.png') });
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(shots, 'desktop-youtube-kit.png') });
   await page.getByRole('button', { name: 'Save thumbnail (1280×720)', exact: true }).click();

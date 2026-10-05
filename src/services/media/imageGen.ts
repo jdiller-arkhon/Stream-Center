@@ -40,6 +40,10 @@ export const THUMB_STYLES: Record<string, { label: string; prompt: string; negat
   fantasy: { label: 'Fantasy', prompt: 'epic fantasy concept art, magical atmosphere, glowing particles, painterly, grand scale' },
   horror: { label: 'Horror', prompt: 'dark horror atmosphere, eerie fog, low key lighting, ominous, desaturated with red accents' },
   minimal: { label: 'Minimal', prompt: 'minimalist flat illustration, simple shapes, clean gradient background, lots of empty space', negative: 'cluttered, busy, detailed background' },
+  cyberpunk: { label: 'Cyberpunk', prompt: 'cyberpunk, rain-soaked neon streets, holograms, chrome and leather, moody blue and magenta light' },
+  dark: { label: 'Dark & gritty', prompt: 'dark gritty atmosphere, harsh shadows, smoke and embers, desaturated, menacing, high contrast' },
+  grunge: { label: 'Grunge', prompt: 'grunge aesthetic, distressed textures, scratched film, gritty, raw, dramatic shadows' },
+  glitch: { label: 'Glitch', prompt: 'glitch art, digital distortion, chromatic aberration, datamosh, corrupted pixels, cyber' },
   '3d': { label: '3D render', prompt: '3d render, octane render, soft studio lighting, glossy materials, stylized' },
 };
 

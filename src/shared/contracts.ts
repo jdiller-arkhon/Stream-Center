@@ -458,7 +458,8 @@ export type ThumbAiEngine = 'off' | 'sdcpp' | 'webui';
 export const THUMB_STYLE_OPTIONS: { key: string; label: string }[] = [
     { key: 'none', label: 'No style' }, { key: 'cinematic', label: 'Cinematic' }, { key: 'neon', label: 'Neon' }, { key: 'anime', label: 'Anime' },
     { key: 'comic', label: 'Comic' }, { key: 'photo', label: 'Photoreal' }, { key: 'fantasy', label: 'Fantasy' }, { key: 'horror', label: 'Horror' },
-    { key: 'minimal', label: 'Minimal' }, { key: '3d', label: '3D render' },
+    { key: 'minimal', label: 'Minimal' }, { key: '3d', label: '3D render' }, { key: 'cyberpunk', label: 'Cyberpunk' }, { key: 'dark', label: 'Dark & gritty' },
+    { key: 'grunge', label: 'Grunge' }, { key: 'glitch', label: 'Glitch' },
 ];
 export interface ThumbAiStatus {
     engine: ThumbAiEngine;

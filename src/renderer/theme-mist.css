@@ -2122,3 +2122,85 @@ h3 {
     grid-column: 1 / -1;
   }
 }
+
+/* ---------------------------------------------------------------- Thumbnail looks, graphics, effects */
+.yt-vibes {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 6px;
+}
+.yt-vibes > span,
+.yt-panel-head strong {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.yt-style-chips .chip.vibe-rage { font-family: Anton, Impact, sans-serif; font-weight: 400; letter-spacing: 0.04em; }
+.yt-style-chips .chip.vibe-neon { font-family: 'Bebas Neue', Impact, sans-serif; font-weight: 400; font-size: 14px; letter-spacing: 0.06em; }
+.yt-style-chips .chip.vibe-toxic { font-family: 'Black Ops One', Impact, sans-serif; font-weight: 400; }
+.yt-style-chips .chip.vibe-blackout { font-family: Anton, Impact, sans-serif; font-weight: 400; background: #111; color: #fff; border-color: #111; }
+.yt-style-chips .chip.vibe-hype { font-family: Bangers, Impact, sans-serif; font-weight: 400; font-size: 14px; letter-spacing: 0.04em; }
+.yt-style-chips .chip.vibe-glitch { font-family: 'JetBrains Mono Variable', monospace; }
+.yt-style-chips .chip.vibe-grunge { font-family: 'Permanent Marker', cursive; font-weight: 400; }
+.yt-panel {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+}
+.yt-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.yt-decal {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) 40px minmax(60px, 110px) minmax(60px, 110px) 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.yt-decal.active {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+}
+.yt-decal input[type='color'],
+.yt-text-fx input[type='color'] {
+  width: 40px;
+  height: 30px;
+  padding: 2px;
+}
+.yt-text-fx {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin: 6px 0 10px;
+}
+.yt-text-fx .compact-toggle,
+.yt-panel .compact-toggle,
+.yt-layer-tools .compact-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+@media (max-width: 640px) {
+  .yt-decal {
+    grid-template-columns: 70px minmax(0, 1fr) 32px;
+  }
+  .yt-decal input[type='range'] {
+    grid-column: 1 / -1;
+  }
+}
