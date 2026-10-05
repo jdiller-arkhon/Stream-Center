@@ -3,6 +3,7 @@
  * Identified, Request/RequestResponse, Event, Reidentify, auth challenge). It is a
  * contract-test double, not a substitute for testing against real OBS.
  */
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,6 +20,16 @@ export interface FakeObsOptions {
 }
 
 const sha = (s: string) => createHash('sha256').update(s).digest('base64');
+
+/** A real JPEG frame (like OBS GetSourceScreenshot returns), rendered once with ffmpeg. */
+let screenshot: string | null = null;
+function programFrame(): string {
+  if (!screenshot) {
+    const jpg = execFileSync('ffmpeg', ['-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=960x540:duration=1', '-frames:v', '1', '-f', 'mjpeg', 'pipe:1']);
+    screenshot = `data:image/jpeg;base64,${jpg.toString('base64')}`;
+  }
+  return screenshot;
+}
 
 export class FakeObs {
   wss: WebSocketServer | null = null;
@@ -194,7 +205,7 @@ export class FakeObs {
       case 'GetInputPropertiesListPropertyItems':
         return { propertyItems: [{ itemName: 'Default', itemValue: 'default', itemEnabled: true }, { itemName: 'Microphone (Shure MV7)', itemValue: '{mic-1}', itemEnabled: true }] };
       case 'GetSourceScreenshot':
-        return { imageData: 'data:image/jpeg;base64,/9j/AAAA' };
+        return { imageData: programFrame() };
       default:
         throw err(204, `Unknown request ${type}`);
     }

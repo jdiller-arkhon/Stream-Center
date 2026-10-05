@@ -933,3 +933,391 @@ hr {
     max-width: 100%;
   }
 }
+
+/* ==========================================================================
+   Colour system — a deliberate multi-hue palette on the white/purple-mist base.
+   Each section owns a hue (like macOS System Settings icon tiles); colour carries
+   meaning (record = red, replay = amber, live = pink, ready = green), never noise.
+   ========================================================================== */
+
+:root {
+  --hue-purple: linear-gradient(145deg, #a78bfa, #7c5cff 60%, #6240e8);
+  --hue-pink: linear-gradient(145deg, #f9a8d4, #ec4899 60%, #db2777);
+  --hue-amber: linear-gradient(145deg, #fcd34d, #f59e0b 60%, #d97706);
+  --hue-red: linear-gradient(145deg, #fca5a5, #ef4444 60%, #dc2626);
+  --hue-green: linear-gradient(145deg, #86efac, #22c55e 60%, #16a34a);
+  --hue-blue: linear-gradient(145deg, #93c5fd, #3b82f6 60%, #2563eb);
+  --hue-teal: linear-gradient(145deg, #5eead4, #14b8a6 60%, #0d9488);
+  --hue-slate: linear-gradient(145deg, #cbd5e1, #94a3b8 60%, #64748b);
+  --aurora:
+    radial-gradient(620px 420px at 88% 18%, rgba(236, 72, 153, 0.55), transparent 62%),
+    radial-gradient(560px 420px at 70% 105%, rgba(59, 130, 246, 0.45), transparent 60%),
+    radial-gradient(700px 520px at 0% 0%, rgba(167, 139, 250, 0.7), transparent 65%),
+    linear-gradient(135deg, #5b3fd9 0%, #7c5cff 45%, #9d4edd 100%);
+}
+
+/* ---------- Sidebar: coloured icon tiles per section --------------------- */
+
+.nav-item svg {
+  width: 26px;
+  height: 26px;
+  padding: 5px;
+  border-radius: 7px;
+  color: #fff;
+  background: var(--hue-slate);
+  box-shadow: 0 1px 2px rgba(31, 26, 46, 0.18), inset 0 0 0 0.5px rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+}
+.nav-item[aria-label="Command Center"] svg { background: var(--hue-purple); }
+.nav-item[aria-label="ClipForge"] svg { background: var(--hue-pink); }
+.nav-item[aria-label="Sessions"] svg { background: var(--hue-amber); }
+.nav-item[aria-label="Stream Controls"] svg { background: var(--hue-red); }
+.nav-item[aria-label="Audio"] svg { background: var(--hue-green); }
+.nav-item[aria-label="Profiles"] svg { background: var(--hue-blue); }
+.nav-item[aria-label="Settings"] svg { background: var(--hue-slate); }
+.nav-item {
+  padding: 6px 10px;
+}
+.nav-item.selected {
+  background: linear-gradient(90deg, rgba(124, 92, 255, 0.16), rgba(124, 92, 255, 0.06));
+  box-shadow: inset 0 0 0 1px rgba(124, 92, 255, 0.18);
+}
+
+/* ---------- Command Center hero: vivid aurora card with white type ------- */
+
+.session-hero {
+  background: var(--aurora);
+  border: 0;
+  box-shadow: 0 2px 6px rgba(91, 63, 217, 0.18), 0 22px 50px rgba(124, 92, 255, 0.28);
+  color: #fff;
+}
+.session-hero h2,
+.session-hero strong {
+  color: #fff;
+}
+.hero-content p,
+.hero-content > small,
+.profile-summary span:not(.game-mark) {
+  color: rgba(255, 255, 255, 0.82);
+}
+.hero-content > small {
+  color: rgba(255, 255, 255, 0.7);
+}
+.session-hero .badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.session-hero .game-mark {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+.session-hero .button.primary {
+  background: #fff;
+  color: #5b3fd9;
+  box-shadow: 0 6px 18px rgba(31, 16, 90, 0.25);
+}
+.session-hero .button.primary:not(:disabled):hover {
+  background: #f5f2ff;
+}
+.session-hero .button.danger {
+  background: rgba(255, 255, 255, 0.95);
+  color: #dc2626;
+}
+.session-hero .button.ghost,
+.session-hero .button:not(.primary):not(.danger) {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+.session-hero .ribbon {
+  opacity: 0.95;
+  filter: grayscale(1) brightness(1.6) drop-shadow(0 26px 40px rgba(31, 16, 90, 0.45));
+}
+
+/* ---------- Readiness: solid semantic circles ---------------------------- */
+
+.check-symbol {
+  background: var(--hue-amber);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+}
+.check-symbol.ok {
+  background: var(--hue-green);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
+}
+
+/* ---------- Capture controls: colour = meaning --------------------------- */
+
+.capture-controls .button:nth-child(1) svg {
+  color: var(--red);
+}
+.capture-controls .button:nth-child(2) svg {
+  color: #f59e0b;
+}
+.capture-controls .button.danger {
+  background: var(--hue-red);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3);
+}
+.capture-controls .button.danger svg {
+  color: #fff;
+}
+.capture-controls .button.primary {
+  background: var(--hue-pink);
+  box-shadow: 0 4px 16px rgba(236, 72, 153, 0.32);
+}
+
+/* ---------- Session pulse + telemetry: coloured figures ------------------- */
+
+.pulse-metrics > div {
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(124, 92, 255, 0.07);
+}
+.pulse-metrics > div:nth-child(2) {
+  background: rgba(236, 72, 153, 0.08);
+}
+.pulse-metrics > div:nth-child(1) strong {
+  color: #6240e8;
+}
+.pulse-metrics > div:nth-child(2) strong {
+  color: #db2777;
+}
+.activity-dot {
+  background: var(--hue-purple);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.15);
+}
+.telemetry strong {
+  color: var(--label);
+}
+
+/* ---------- Badges: a fuller semantic set -------------------------------- */
+
+.badge.cyan {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+.badge.violet {
+  background: var(--accent-tint);
+  color: var(--accent-text);
+}
+.badge.amber {
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+}
+
+/* ---------- Buttons: primary gets a subtle two-hue gradient -------------- */
+
+.button.primary {
+  background: linear-gradient(135deg, #8b6dff 0%, #7c5cff 45%, #a24bea 100%);
+}
+.button.primary:not(:disabled):hover {
+  background: linear-gradient(135deg, #7d5ff7 0%, #6e4ef2 45%, #9440df 100%);
+}
+
+/* ---------- Stream Controls: scenes with their own hues ------------------- */
+
+.scene-card .scene-art,
+.scene-card .scene-0 {
+  background: var(--hue-purple);
+}
+.scene-card .scene-1 {
+  background: var(--hue-blue);
+}
+.scene-card .scene-2 {
+  background: var(--hue-pink);
+}
+.scene-card .scene-3 {
+  background: var(--hue-amber);
+}
+.scene-card:nth-child(4n + 5) .scene-art {
+  background: var(--hue-teal);
+}
+.scene-card .scene-art,
+.scene-card .scene-art span,
+.scene-card .scene-art svg {
+  color: #fff;
+}
+.scene-card .scene-art span {
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.scene-card {
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.scene-card:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(76, 52, 160, 0.14);
+}
+.scene-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent), 0 12px 28px rgba(124, 92, 255, 0.22);
+}
+
+/* ---------- Audio: channel colours --------------------------------------- */
+
+.channel-icon,
+.channel-icon.tone-0 {
+  background: var(--hue-purple);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(124, 92, 255, 0.3);
+}
+.channel-icon.tone-1 {
+  background: var(--hue-blue);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
+}
+.channel-icon.tone-2 {
+  background: var(--hue-pink);
+  box-shadow: 0 6px 16px rgba(236, 72, 153, 0.3);
+}
+.channel-icon.tone-3 {
+  background: var(--hue-teal);
+}
+.mixer-channel input[type="range"] {
+  accent-color: #7c5cff;
+}
+
+/* ---------- Profiles: colourful banners ---------------------------------- */
+
+.profile-banner,
+.profile-banner.profile-0 {
+  background: linear-gradient(135deg, #7c5cff, #a24bea 60%, #ec4899);
+  color: #fff;
+}
+.profile-banner.profile-1 {
+  background: linear-gradient(135deg, #3b82f6, #6366f1 60%, #8b5cf6);
+}
+.profile-banner.profile-2 {
+  background: linear-gradient(135deg, #14b8a6, #3b82f6);
+}
+.profile-banner.profile-3 {
+  background: linear-gradient(135deg, #f59e0b, #ec4899);
+}
+.profile-banner,
+.profile-banner span,
+.profile-banner svg {
+  color: #fff;
+}
+.profile-card {
+  overflow: hidden;
+}
+
+/* ---------- Sessions & settings lists ------------------------------------ */
+
+.session-list > button svg,
+.settings-nav button svg {
+  color: var(--accent);
+}
+.settings-nav button.selected {
+  background: linear-gradient(90deg, rgba(124, 92, 255, 0.16), rgba(124, 92, 255, 0.05));
+  box-shadow: inset 0 0 0 1px rgba(124, 92, 255, 0.18);
+}
+.event-timeline > div::before {
+  background: var(--accent);
+}
+
+/* ---------- ClipForge: colourful timeline & presets ---------------------- */
+
+.timeline-segment {
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.35), rgba(162, 75, 234, 0.25));
+  border: 1px solid rgba(124, 92, 255, 0.55);
+}
+.timeline-segment.selected {
+  border: 2px solid #7c5cff;
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.22);
+}
+.waveform > span {
+  background: linear-gradient(180deg, #ec4899, #7c5cff);
+  opacity: 0.85;
+}
+.preset-strip button.selected {
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.14), rgba(236, 72, 153, 0.1));
+}
+.preset-dot {
+  width: 8px;
+  height: 8px;
+  background: #3b82f6;
+}
+.preset-1 {
+  background: #a24bea;
+}
+.preset-2 {
+  background: #ec4899;
+}
+.preset-3 {
+  background: #f59e0b;
+}
+.play-button {
+  background: var(--hue-purple);
+  box-shadow: 0 6px 18px rgba(124, 92, 255, 0.35);
+}
+.progress > span {
+  background: linear-gradient(90deg, #7c5cff, #ec4899);
+}
+.media-item.selected {
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.12), rgba(236, 72, 153, 0.06));
+}
+
+/* ---------- Highlights: depth on hover ----------------------------------- */
+
+.highlight-card {
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.highlight-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(76, 52, 160, 0.16);
+}
+
+/* ---------- Status bar: coloured state dots ------------------------------ */
+
+.status-dot {
+  background: var(--tertiary);
+}
+.status-dot.recording {
+  background: var(--red);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18) !important;
+}
+.status-bar svg {
+  color: var(--accent);
+}
+
+/* ---------- Brand: richer emblem ---------------------------------------- */
+
+.brand-emblem {
+  background: linear-gradient(145deg, #a78bfa, #7c5cff 45%, #ec4899);
+}
+.avatar {
+  background: linear-gradient(145deg, #a78bfa, #ec4899);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-card,
+  .highlight-card {
+    transition: none;
+  }
+  .scene-card:not(:disabled):hover,
+  .highlight-card:hover {
+    transform: none;
+  }
+}
+
+/* Refinements: hero badges stay white on the aurora whatever their tone; info icons get hues. */
+.session-hero .badge,
+.session-hero .badge.cyan,
+.session-hero .badge.violet,
+.session-hero .badge.amber {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+.info-columns > div:nth-child(1) svg { color: #7c5cff; }
+.info-columns > div:nth-child(2) svg { color: #ec4899; }
+.info-columns > div:nth-child(3) svg { color: #3b82f6; }
+.meter-placeholder {
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.06), rgba(236, 72, 153, 0.06));
+}

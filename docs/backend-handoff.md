@@ -4,9 +4,38 @@ Status date: 2026-10-05. Branch: `claude/wizardly-johnson-9f4gfl`.
 
 ## Read this first
 
-- **The frontend did not exist when this was written.** `chatgpt/drift-studio-frontend` was still at the initial commit and there was no `docs/frontend-handoff.md`. So nothing here has been wired to ChatGPT's screens yet. The services, IPC bridge, contract and `DesktopAdapter` are done and tested. Connecting them to the UI is the next integration step, described in [Integrating the frontend](#integrating-the-frontend).
-- The contract was written first, as the master prompt asks. If ChatGPT's frontend already defines its own DTOs, reconcile them against `src/shared/contracts.ts`. Change both sides together (see `docs/contract.md`) rather than forking the contract.
-- **Nothing has been tested on Windows or against real OBS yet.** See [Verification status](#verification-status).
+- **The UI is connected.** ChatGPT's renderer (merged from `chatgpt/drift-studio-frontend`) runs inside Electron and talks to the real services through `window.drift`, exactly the bridge its handoff specified. Nothing falls back to demo data: the browser build stays a labelled demo, and the desktop app reports `DESKTOP MODE`.
+- **Every UI function was verified end to end** in the real Electron app (`npm run test:e2e`, 38 checks). The test drives the actual UI against a fake obs-websocket server and real FFmpeg, and checks the real effect of each action: OBS state, files on disk, and ffprobe results. See [Verification status](#verification-status).
+- **Not yet verified on Windows or against real OBS.** The Windows checklist below remains open.
+- **Visual theme:** at the user's request the UI uses an Apple-inspired white and purple-mist theme with a multi-hue colour system (`theme-mist-base.css`, generated, plus `theme-mist.css`). Layout and behaviour are ChatGPT's, unchanged.
+
+## How the UI reaches the services
+
+```
+renderer (React, ChatGPT)  ── DesktopAdapter (validates every snapshot/reply)
+   │ window.drift { apiVersion, readState, request(op, input, requestId), onState }
+preload (sandboxed, allow-listed operations)
+   │ IPC drift:readState / drift:request / drift:state
+main ── StudioBridge (src/services/bridge) ── DriftCore services
+```
+
+- `StudioBridge` builds complete `StudioSnapshot`s from real state (OBS, audio, profiles, sessions, clips, projects, jobs, settings, telemetry) and pushes them on change. Each push carries a monotonically increasing `revision`, and the preload never lets an older snapshot replace a newer one.
+- Each operation is re-validated in main with the renderer's own `validateRequest`, mapped onto services, and the snapshot is rebuilt **before** the reply. The UI therefore never shows stale state after an action. A repeated `requestId` returns the same result (idempotent retries).
+- The renderer's edit model (single track, 0–100 crop, 0–1 gains, canvas-pixel caption sizes) is converted to the service `EditProject` for FFmpeg export (`StudioBridge.toCoreProject`). Its webcam toggle is a layout guide and is not rendered. Exports use automatic encoder selection (hardware if it works, otherwise software).
+- **Protocol additions** (desktop only; DemoAdapter rejects them): `importNative` and `relinkNative` (native file picker, then ffprobe indexing), `pickMusic` (an authorized music handle served as `drift-media://music/…`) and `setObsPassword` (OS-protected storage).
+- **Renderer changes I made,** kept minimal and mode-aware so demo wording is unchanged:
+  - truthful desktop labels;
+  - playback of `drift-media://` URLs;
+  - the OBS password field;
+  - native import, relink and music pickers;
+  - the real OBS preview in Stream Controls;
+  - real scene names on scene cards.
+- **Bugs fixed during verification:**
+  - the setup dialog kept a stale media folder, which disabled Save;
+  - placeholder text was saved as the profile and game names;
+  - export file names had a doubled extension;
+  - the live warning outlived the stream;
+  - hard-coded scene labels did not match OBS.
 
 ## Architecture
 
@@ -141,17 +170,35 @@ npm run dist:win           # NSIS installer → release/ (run on Windows)
 
 ## Verification status
 
-**Run here (Linux container, no GPU, no OBS):**
+**Run here (Linux container, no GPU, no real OBS).** These are mocked-integration results, not Windows results:
 
-- `npm test`: 42 tests passing.
-  - Contract/unit tests.
-  - Real-ffmpeg integration: vertical slice 2, i.e. import → waveform → trim → save → export with audio → ffprobe duration and A/V check. Also multi-segment vertical export with crop, webcam overlay, captions and music; cancel, retry and cleanup; missing file → relink → retry; duplicates; MKV proxy; INTERRUPTED recovery.
-  - Fake-OBS integration: vertical slice 1, i.e. connect → start replay buffer → save replay → clip indexed. Also auth failure, reconnect, lost event, actions done in OBS, audio, shortcuts, and that a session never streams.
-- `npm run smoke:electron`: 19/19. Real Electron 44 with the sandboxed preload. Covers IPC validation, OBS connect and replay save from the renderer, the drift-media thumbnail and Range/206, `<video>` playback, navigation and popup blocking, and CSP enforcement.
-- `electron-builder --win dir`: produced `Drift Studio.exe` (unsigned) with a 1.2 MB asar.
+| Suite | Result | What it proves |
+| --- | --- | --- |
+| `npm run test:e2e` | **38/38** | Real Electron app, real built UI, clicked through every function. It checks both what the UI shows and the real effect behind it. |
+| `npm run test:services` | **50/50** | Services and `StudioBridge` against a fake obs-websocket v5 server and real FFmpeg. Every snapshot and response passes the renderer's own validators. |
+| `npm run test:renderer` | **14/14** | ChatGPT's contract and adapter tests. |
+| `npm run test:browser` | **38/38** | ChatGPT's browser demo suite: layouts, overflow, focus, keyboard and dialogs, run with the new theme. |
+| `npm run typecheck` | clean | Renderer and desktop configs (TypeScript 7). |
 
-**Not verified. Windows smoke checklist for a real machine:**
+The end-to-end run covers:
+- boot in desktop mode with no Node globals in the renderer;
+- Settings: media folder created on disk, OBS password stored by the service, and connect;
+- first-run setup, with the profile named after the game;
+- real preflight (finds the capture source in OBS);
+- Start Session: replay buffer on, recording and streaming off, the game executable launched;
+- Save Replay: a real indexed clip with a thumbnail;
+- recording start and stop;
+- ClipForge: plays the real clip, trims it, and exports it;
+- the export is exactly 3.500 s at 1920×1080, H.264/AAC, with audio and video lengths equal;
+- Open Output, and import through the native picker;
+- scene switch with real scene names, and a decoded OBS preview frame;
+- Go Live, still live after changing screens, then End stream, with the live warning cleared;
+- mute and unmute of the OBS mic;
+- session shows its saved replay, and session notes persist across a reload;
+- End Session;
+- no renderer errors.
 
+**Not verified.** Windows smoke checklist for a real machine:
 1. Install from the NSIS build. Launch it. The first run stores folders, the OBS password survives a restart, and the app runs with no FFmpeg (capability explains) and then with FFmpeg on PATH.
 2. OBS 30/31: connect, then wrong password (no retry loop), then close and reopen OBS (auto-reconnect), then start recording from OBS (UI reflects it).
 3. Replay buffer disabled (explained) → enabled → start → Save Replay via button and via the global shortcut while a game is focused → clip appears with thumbnail → plays (MKV proxy if OBS records MKV).

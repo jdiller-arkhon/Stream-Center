@@ -466,7 +466,7 @@ export class DriftCore {
     def('obs.saveReplay', () => this.obs.saveReplay());
     def('obs.startStream', async () => {
       const st = await this.obs.startStream();
-      this.notice('warning', 'You are live', 'Streaming started to the destination configured in OBS.');
+      this.notice('info', 'You are live', 'Streaming started to the destination configured in OBS.');
       return st;
     });
     def('obs.stopStream', () => this.obs.stopStream());

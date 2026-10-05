@@ -47,6 +47,7 @@ const URI_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
 const MEDIA_EXT = /\.(mp4|mkv|mov|webm|flv|ts|m4v|avi)$/i;
 /** Placeholder text the renderer's setup form uses before a game is named. */
 const GAME_PLACEHOLDER = 'Choose a game';
+const NAME_PLACEHOLDER = 'Set up your first profile';
 
 export class BridgeError extends Error {
   constructor(readonly error: StructuredError) {
@@ -270,7 +271,10 @@ export class StudioBridge {
         shortcuts: settings.shortcuts.some((s) => s.scope === 'global' && s.enabled),
       },
       telemetry: { gameFps: null, diskFreeBytes: this.disk?.freeBytes ?? null },
-      warnings: this.warnings(caps, st.connection.state === 'failed' ? st.connection.detail : null),
+      warnings: [
+        ...(st.streaming.active ? [`You are live${this.streamLabel ? ` · ${this.streamLabel}` : ''}: streaming through the service configured in OBS.`] : []),
+        ...this.warnings(caps, st.connection.state === 'failed' ? st.connection.detail : null),
+      ],
     };
     return snapshot;
   }
@@ -464,7 +468,7 @@ export class StudioBridge {
         return undefined; // never touches OBS outputs: a live stream keeps running
       }
       case 'saveProfile': {
-        const profile = validateProfile(p);
+        const profile = this.normalizeProfile(validateProfile(p));
         const all = kvGet<Record<string, UiProfile>>(core.db, KV_PROFILES) ?? {};
         if (profile.hotkey) {
           const clash = Object.values(all).find((x) => x.id !== profile.id && x.hotkey && x.hotkey.toLowerCase() === profile.hotkey.toLowerCase());
@@ -616,6 +620,14 @@ export class StudioBridge {
   }
 
   // ---------------------------------------------------------------- operation helpers
+
+  /** Replaces the setup form's placeholder text with real values before storing. */
+  private normalizeProfile(p: UiProfile): UiProfile {
+    const derived = URI_RE.test(p.gamePath.trim()) ? '' : path.basename(p.gamePath.trim()).replace(/\.(exe|lnk)$/i, '');
+    const game = p.game === GAME_PLACEHOLDER ? derived || 'My game' : p.game;
+    const name = p.name === NAME_PLACEHOLDER ? (game && game !== 'My game' ? `${game} session` : 'My first profile') : p.name;
+    return { ...p, game, name };
+  }
 
   private requireProfile(id: string): UiProfile {
     return this.uiProfiles().find((x) => x.id === id) ?? fail('NOT_FOUND', 'Save this profile before using it');

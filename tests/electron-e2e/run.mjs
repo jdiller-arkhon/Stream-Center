@@ -108,6 +108,8 @@ try {
   await page.getByRole('button', { name: 'Save setup', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'detached' });
   await dismissToast();
+  const picker = await page.getByLabel('Current session profile').locator('option:checked').innerText().catch(() => '');
+  check('first-run setup names the profile after the game, not the placeholder', picker.endsWith(' session') && !picker.includes('Set up'), picker);
 
   // ---- Preflight + Start Session
   await page.getByRole('button', { name: 'Check setup', exact: true }).click();
@@ -188,7 +190,8 @@ try {
   check('scene cards are labelled with the real OBS scene names', (await page.locator('.scene-card .scene-art span').allInnerTexts()).map((x) => x.toLowerCase()).join('|') === 'gameplay|brb|starting soon');
   await until(() => obs.currentScene === 'Starting Soon', 5000, 'scene switch');
   check('scene switcher changes the OBS program scene', obs.currentScene === 'Starting Soon');
-  check('program monitor shows the OBS preview frame', await page.locator('.program-monitor img.obs-preview').count() === 1);
+  const frame = await until(() => page.locator('.program-monitor img.obs-preview').evaluate((img) => (img.complete && img.naturalWidth > 0 ? img.naturalWidth : 0)), 8000, 'preview frame').catch(() => 0);
+  check('program monitor shows a decoded OBS preview frame', frame === 960, `naturalWidth ${frame}`);
   await page.getByRole('button', { name: 'Go Live', exact: true }).click();
   await page.getByRole('dialog').waitFor();
   await page.getByLabel('Destination', { exact: true }).fill('Twitch · drift');
@@ -201,6 +204,8 @@ try {
   await page.getByRole('button', { name: 'End stream', exact: true }).click();
   await page.getByRole('button', { name: 'Go Live', exact: true }).waitFor();
   check('End stream stops streaming in OBS', !obs.streaming);
+  await page.waitForTimeout(400);
+  check('the live warning disappears once the stream has ended', !(await page.getByText(/You are live/).isVisible().catch(() => false)));
 
   // ---- Audio
   await nav('Audio');
