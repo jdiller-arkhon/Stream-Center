@@ -269,6 +269,14 @@ export class DriftCore {
     }
   }
 
+  get platform(): Platform {
+    return this.opts.platform;
+  }
+
+  recentNotices(): Notice[] {
+    return this.notices.slice(0, 20);
+  }
+
   notice(level: Notice['level'], title: string, message: string, refId: string | null = null): void {
     const n: Notice = { id: newId('ntc'), at: nowIso(), level, title, message, refId };
     this.notices.unshift(n);

@@ -11,3 +11,10 @@ export function readLocalVideo(url:string):Promise<{durationMs:number;thumbnailU
   video.src=url;
  });
 }
+
+/** Resolves a media handle: browser object URLs come from the renderer registry; desktop
+ * handles are already app-protocol URLs (drift-media://…) served by the main process. */
+export function resolveMediaUrl(handle:string|null,registry:Map<string,string>):string|undefined{
+ if(!handle)return undefined;
+ return registry.get(handle)??(handle.startsWith('drift-media://')?handle:undefined);
+}

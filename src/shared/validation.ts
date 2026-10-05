@@ -31,7 +31,7 @@ function job(value: unknown) { const j = obj(value); for (const k of ['id', 'pro
 export const validateProfile = (p: unknown): SessionProfile => { profile(p); return p as SessionProfile; };
 export const validateProject = (p: unknown): EditProject => { project(p); return p as EditProject; };
 export function validateRequest(op: Operation, input: unknown): void {
-    if (['disconnect', 'endSession', 'saveReplay', 'reset'].includes(op)) {
+    if (['disconnect', 'endSession', 'saveReplay', 'reset', 'importNative', 'pickMusic'].includes(op)) {
         if (input !== undefined)
             invalid('Expected no input');
         return;
@@ -98,6 +98,10 @@ export function validateRequest(op: Operation, input: unknown): void {
                 one(e.codec, ['h264', 'hevc'], 'codec');
             }
             break;
+        case 'setObsPassword':
+            nullable(p.password, x => str(x, 'password', 512));
+            break;
+        case 'relinkNative':
         case 'selectProfile':
         case 'cancelJob':
         case 'retryJob':
@@ -160,8 +164,12 @@ export function validateResponse(op: Operation, value: unknown): unknown {
     }
     if (op === 'saveReplay')
         clip(value);
-    else if (op === 'importClips')
+    else if (op === 'importClips' || op === 'importNative')
         list(value, 'clips').forEach(clip);
+    else if (op === 'relinkNative')
+        nullable(value, clip);
+    else if (op === 'pickMusic')
+        nullable(value, x => { const m = obj(x); str(m.handle, 'music handle'); str(m.name, 'music name'); });
     else if (op === 'export')
         job(value);
     else if (op === 'prepareSession')
@@ -172,7 +180,7 @@ export function validateResponse(op: Operation, value: unknown): unknown {
 }
 /** Renderer check; main must independently repeat capability and authorization checks. */
 export function assertCapability(state: StudioSnapshot, operation: Operation): void {
-    const map: Partial<Record<Operation, keyof StudioSnapshot['capabilities']>> = { connect: 'obs', recording: 'recording', replay: 'replay', saveReplay: 'replay', scene: 'obs', streaming: 'streaming', audio: 'obsAudio', launchGame: 'launch', startSession: 'launch', importClips: 'import', export: 'export' };
+    const map: Partial<Record<Operation, keyof StudioSnapshot['capabilities']>> = { connect: 'obs', recording: 'recording', replay: 'replay', saveReplay: 'replay', scene: 'obs', streaming: 'streaming', audio: 'obsAudio', launchGame: 'launch', startSession: 'launch', importClips: 'import', importNative: 'import', relinkNative: 'import', pickMusic: 'import', export: 'export' };
     const capability = map[operation];
     if (!capability)
         return;

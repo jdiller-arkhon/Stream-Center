@@ -25,6 +25,7 @@
     "src/main",
     "src/preload",
     "src/services/contract",
+    "src/services/bridge",
     "src/services/core",
     "src/services/DriftCore.ts",
     "src/services/audio",

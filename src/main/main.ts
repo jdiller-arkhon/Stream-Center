@@ -6,9 +6,9 @@ import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, protocol, sa
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { IPC_CHANNELS } from '../services/contract/channels';
 import type { PickPathRequest } from '../services/contract/dto';
 import { DriftCore } from '../services/DriftCore';
+import { BridgeError, StudioBridge } from '../services/bridge/StudioBridge';
 import type { Platform, SecretStore } from '../services/core/platform';
 import { MemorySecretStore } from '../services/core/platform';
 import { validateUri } from '../services/sessions/launcher';
@@ -30,6 +30,8 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let core: DriftCore | null = null;
+let bridge: StudioBridge | null = null;
+const TEST_MODE = !app.isPackaged && process.env.DRIFT_TEST_MODE === '1';
 let mainWindow: BrowserWindow | null = null;
 
 // ---------------------------------------------------------------------------
@@ -94,9 +96,24 @@ function createPlatform(): Platform {
       if (problem) throw new Error(problem);
       await shell.openExternal(uri, { activate: true });
     },
-    openPath: (p) => shell.openPath(p),
+    async openPath(p) {
+      // Test mode (unpackaged only): record instead of launching a desktop application.
+      if (TEST_MODE && process.env.DRIFT_TEST_OPEN_LOG) {
+        fs.appendFileSync(process.env.DRIFT_TEST_OPEN_LOG, p + '\n');
+        return '';
+      }
+      return shell.openPath(p);
+    },
     showItemInFolder: (p) => shell.showItemInFolder(p),
     async pickPath(req) {
+      // Test mode (unpackaged only): native dialogs cannot be automated, so read the answer from a file.
+      if (TEST_MODE && process.env.DRIFT_TEST_PICK_FILE) {
+        try {
+          return JSON.parse(fs.readFileSync(process.env.DRIFT_TEST_PICK_FILE, 'utf8')) as string[];
+        } catch {
+          return [];
+        }
+      }
       const props: Array<'openFile' | 'openDirectory' | 'multiSelections' | 'createDirectory'> =
         req.kind === 'directory' ? ['openDirectory', 'createDirectory'] : req.kind === 'files' ? ['openFile', 'multiSelections'] : ['openFile'];
       const opts: Electron.OpenDialogOptions = { title: req.title ?? undefined, properties: props, filters: FILTERS[req.purpose] };
@@ -175,13 +192,23 @@ function registerProtocols(): void {
     });
   });
 
-  // drift-media://<clip|proxy|thumb>/<clipId> — only library-owned ids resolve to files.
+  // drift-media://<clip|proxy|thumb>/<clipId>, music/<token>, preview/program — only
+  // library-owned ids or user-picked handles resolve; arbitrary paths never do.
   protocol.handle('drift-media', async (req) => {
     const url = new URL(req.url);
-    const kind = url.host as 'clip' | 'proxy' | 'thumb';
+    const kind = url.host;
     const id = decodeURIComponent(url.pathname.replace(/^\//, ''));
-    if (!core || !['clip', 'proxy', 'thumb'].includes(kind) || !/^[\w-]{1,128}$/.test(id)) return new Response('Not found', { status: 404 });
-    const file = core.library.resolveMedia(kind, id);
+    if (!core || !['clip', 'proxy', 'thumb', 'music', 'preview'].includes(kind) || !/^[\w-]{1,128}$/.test(id)) return new Response('Not found', { status: 404, headers: MEDIA_CORS });
+    if (kind === 'preview') {
+      try {
+        const shot = await core.obs.preview(960);
+        const b64 = shot.imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
+        return new Response(Buffer.from(b64, 'base64'), { headers: { ...MEDIA_CORS, 'content-type': 'image/jpeg', 'cache-control': 'no-store' } });
+      } catch {
+        return new Response('Preview unavailable', { status: 503, headers: MEDIA_CORS });
+      }
+    }
+    const file = kind === 'music' ? (bridge?.resolveMusic(id) ?? null) : core.library.resolveMedia(kind as 'clip' | 'proxy' | 'thumb', id);
     if (!file) return new Response('Not found', { status: 404, headers: MEDIA_CORS });
     return serveFile(file, req.headers.get('range'));
   });
@@ -295,12 +322,23 @@ function configureSession(): void {
 }
 
 function registerIpc(): void {
-  ipcMain.handle(IPC_CHANNELS.invoke, async (event, msg: { method?: unknown; input?: unknown }) => {
-    if (!isAppUrl(event.senderFrame?.url ?? '')) {
-      return { ok: false, error: { code: 'VALIDATION', message: 'Request from an untrusted frame', detail: null, retryable: false } };
+  const untrusted = { ok: false, error: { code: 'INVALID_INPUT', message: 'Request from an untrusted frame', recoverable: false, details: null } };
+  const starting = { ok: false, error: { code: 'BUSY', message: 'Drift Studio is still starting', recoverable: true, details: null } };
+  ipcMain.handle('drift:readState', async (event) => {
+    if (!isAppUrl(event.senderFrame?.url ?? '')) return untrusted;
+    if (!bridge) return starting;
+    return { ok: true, data: await bridge.readState() };
+  });
+  ipcMain.handle('drift:request', async (event, msg: { operation?: unknown; input?: unknown; requestId?: unknown }) => {
+    if (!isAppUrl(event.senderFrame?.url ?? '')) return untrusted;
+    if (!bridge) return starting;
+    try {
+      const data = await bridge.request(String(msg?.operation ?? ''), msg?.input, String(msg?.requestId ?? ''));
+      return { ok: true, data: data ?? null };
+    } catch (err) {
+      const e = err instanceof BridgeError ? err.error : { code: 'IO_ERROR', message: 'Unexpected error', recoverable: false, details: String(err) };
+      return { ok: false, error: e };
     }
-    if (!core) return { ok: false, error: { code: 'BUSY', message: 'Drift Studio is still starting', detail: null, retryable: true } };
-    return core.invokeRaw(typeof msg?.method === 'string' ? msg.method : '', msg?.input);
   });
 }
 
@@ -321,14 +359,20 @@ app.whenReady().then(async () => {
   if (app.isPackaged) Menu.setApplicationMenu(null);
   const resourceDirs = [path.join(process.resourcesPath ?? '', 'ffmpeg'), path.join(app.getAppPath(), 'resources', 'ffmpeg')];
   core = new DriftCore({ platform: createPlatform(), resourceDirs, safeMode: SAFE_MODE, echoLogs: !app.isPackaged });
-  core.bus.onAny((event, payload) => {
-    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send(IPC_CHANNELS.event, { event, payload });
+  bridge = new StudioBridge(core, {
+    publish: (snapshot) => {
+      for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('drift:state', snapshot);
+    },
   });
   configureSession();
   registerProtocols();
   registerIpc();
-  createWindow();
   await core.start();
+  await bridge.start();
+  createWindow();
+  // OBS peak meters only while the window is focused (no extra work while gaming).
+  app.on('browser-window-focus', () => void bridge?.setMetersWanted(true));
+  app.on('browser-window-blur', () => void bridge?.setMetersWanted(false));
   if (SAFE_MODE) core.notice('warning', 'Safe mode', 'Global shortcuts are disabled for this run.');
 });
 
@@ -340,6 +384,7 @@ app.on('will-quit', (e) => {
   if (core && !disposing) {
     disposing = true;
     e.preventDefault();
+    bridge?.dispose();
     void core.dispose().finally(() => {
       core = null;
       app.quit();

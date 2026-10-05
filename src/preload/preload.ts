@@ -1,41 +1,60 @@
 /**
- * Sandboxed preload. Exposes exactly one object, `window.driftDesktop`, with
- * allow-listed invoke/on. No Node, no ipcRenderer, no arbitrary channels.
+ * Sandboxed preload. Exposes exactly the bridge specified in docs/frontend-handoff.md:
+ *   window.drift = { apiVersion: 1, readState(), request(operation, input, requestId), onState(listener) }
+ * No Node, no ipcRenderer, no arbitrary channels. Operations are allow-listed here and
+ * validated again in the main process.
  */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import { CONTRACT_VERSION_FOR_PRELOAD, EVENT_ALLOWLIST, IPC_CHANNELS, METHOD_ALLOWLIST } from '../services/contract/channels';
 
-const methods = new Set<string>(METHOD_ALLOWLIST);
-const events = new Set<string>(EVENT_ALLOWLIST);
-const listeners = new Map<string, Set<(payload: unknown) => void>>();
+const CHANNELS = { readState: 'drift:readState', request: 'drift:request', state: 'drift:state' } as const;
+const OPERATIONS = new Set([
+  'connect', 'disconnect', 'selectProfile', 'saveProfile', 'prepareSession', 'startSession', 'endSession', 'launchGame',
+  'recording', 'replay', 'saveReplay', 'scene', 'streaming', 'audio', 'importClips', 'updateClip', 'saveProject', 'export',
+  'cancelJob', 'retryJob', 'openOutput', 'saveSettings', 'sessionNotes', 'importNative', 'relinkNative', 'pickMusic', 'setObsPassword',
+  'scenario', 'reset',
+]);
 
-ipcRenderer.on(IPC_CHANNELS.event, (_e: IpcRendererEvent, msg: { event: string; payload: unknown }) => {
-  const set = listeners.get(msg?.event);
-  if (!set) return;
-  for (const fn of set) {
+type Snapshot = { revision?: number } & Record<string, unknown>;
+const listeners = new Set<(state: unknown) => void>();
+let newest: Snapshot | null = null;
+
+ipcRenderer.on(CHANNELS.state, (_e: IpcRendererEvent, snapshot: Snapshot) => {
+  if (newest && typeof snapshot?.revision === 'number' && typeof newest.revision === 'number' && snapshot.revision < newest.revision) return;
+  newest = snapshot;
+  for (const l of listeners) {
     try {
-      fn(msg.payload);
+      l(snapshot);
     } catch (err) {
-      console.error('[drift] event handler failed', err);
+      console.error('[drift] state listener failed', err);
     }
   }
 });
 
-contextBridge.exposeInMainWorld('driftDesktop', {
-  contractVersion: CONTRACT_VERSION_FOR_PRELOAD,
-  invoke(method: string, input: unknown) {
-    if (typeof method !== 'string' || !methods.has(method)) {
-      return Promise.resolve({ ok: false, error: { code: 'VALIDATION', message: `Unknown operation ${String(method)}`, detail: null, retryable: false } });
-    }
-    return ipcRenderer.invoke(IPC_CHANNELS.invoke, { method, input: input ?? {} });
+function unwrap(r: { ok: boolean; data?: unknown; error?: { message?: string; code?: string } }): unknown {
+  if (r && r.ok) return r.data;
+  const err = new Error(r?.error?.message ?? 'Desktop service error');
+  err.name = r?.error?.code ?? 'ServiceError';
+  throw err;
+}
+
+contextBridge.exposeInMainWorld('drift', {
+  apiVersion: 1,
+  async readState() {
+    const snap = unwrap(await ipcRenderer.invoke(CHANNELS.readState)) as Snapshot;
+    // An event that arrived while reading is newer than the read; never go backwards.
+    if (newest && typeof newest.revision === 'number' && typeof snap?.revision === 'number' && newest.revision > snap.revision) return newest;
+    newest = snap;
+    return snap;
   },
-  on(event: string, handler: (payload: unknown) => void) {
-    if (typeof event !== 'string' || !events.has(event) || typeof handler !== 'function') throw new Error(`Unknown event ${String(event)}`);
-    let set = listeners.get(event);
-    if (!set) listeners.set(event, (set = new Set()));
-    set.add(handler);
+  async request(operation: string, input: unknown, requestId: string) {
+    if (typeof operation !== 'string' || !OPERATIONS.has(operation)) throw new Error('Operation not allowlisted');
+    return unwrap(await ipcRenderer.invoke(CHANNELS.request, { operation, input, requestId: String(requestId ?? '') }));
+  },
+  onState(listener: (state: unknown) => void) {
+    if (typeof listener !== 'function') throw new Error('listener must be a function');
+    listeners.add(listener);
     return () => {
-      set!.delete(handler);
+      listeners.delete(listener);
     };
   },
 });

@@ -83,6 +83,21 @@ export class ProjectService {
     return next;
   }
 
+  /**
+   * Stores a project produced outside the revisioned editor flow (the renderer's own edit
+   * model, converted by the desktop bridge) so the export job can load it by id.
+   */
+  upsertForExport(input: EditProject): EditProject {
+    const project = EditProject.parse(input);
+    this.validate(project);
+    const existing = this.db.prepare('SELECT revision FROM projects WHERE id = ?').get(project.id) as { revision: number } | undefined;
+    const next: EditProject = { ...project, revision: (existing?.revision ?? 0) + 1, updatedAt: nowIso() };
+    this.db
+      .prepare('INSERT INTO projects(id, revision, updated_at, doc) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision, updated_at=excluded.updated_at, doc=excluded.doc')
+      .run(next.id, next.revision, next.updatedAt, JSON.stringify(next));
+    return next;
+  }
+
   applyPreset(id: string, presetId: string): EditProject {
     const preset = EXPORT_PRESETS.find((p) => p.id === presetId) ?? fail('NOT_FOUND', 'Preset not found');
     const p = this.get(id);

@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EVENT_NAMES, METHOD_NAMES } from '../src/services/contract/api';
-import { CONTRACT_VERSION_FOR_PRELOAD, EVENT_ALLOWLIST, METHOD_ALLOWLIST } from '../src/services/contract/channels';
-import { CONTRACT_VERSION, ExportPreset, Settings } from '../src/services/contract/dto';
+import { ExportPreset, Settings } from '../src/services/contract/dto';
 import { EXPORT_PRESETS, defaultSettings } from '../src/services/contract/defaults';
 import { buildAss, buildExportCommand, escapeAssText } from '../src/services/media/exportBuilder';
 import { ProgressParser, playbackPlan } from '../src/services/media/ffmpeg';
@@ -16,12 +14,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 describe('shared contract', () => {
-  it('preload allowlists match the method/event registry exactly', () => {
-    expect([...METHOD_ALLOWLIST].sort()).toEqual([...METHOD_NAMES].sort());
-    expect([...EVENT_ALLOWLIST].sort()).toEqual([...EVENT_NAMES].sort());
-    expect(CONTRACT_VERSION_FOR_PRELOAD).toBe(CONTRACT_VERSION);
-  });
-
   it('defaults and presets satisfy their schemas', () => {
     expect(Settings.safeParse(defaultSettings()).success).toBe(true);
     for (const p of EXPORT_PRESETS) expect(ExportPreset.safeParse(p).success, p.id).toBe(true);

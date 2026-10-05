@@ -1,4 +1,4 @@
-import { ServiceError, type Operation, type OperationMap, type StudioService, type StudioSnapshot, type Job, type Session, type ClipAsset } from '../shared/contracts';
+import { DESKTOP_ONLY_OPERATIONS, ServiceError, type Operation, type OperationMap, type StudioService, type StudioSnapshot, type Job, type Session, type ClipAsset } from '../shared/contracts';
 import { validateRequest, validateSnapshot, validateProfile, assertCapability } from '../shared/validation';
 import { makeFixtures, now, uid } from './fixtures';
 const KEY = 'drift-studio.demo.v1';
@@ -42,6 +42,8 @@ export class DemoAdapter implements StudioService {
     private event(message: string) { const active = this.state.activeSessionId; if (!active)
         return; this.publish({ ...this.state, sessions: this.state.sessions.map(s => s.id === active ? { ...s, events: [...s.events, { id: uid(), at: now(), message }] } : s) }); }
     async invoke<K extends Operation>(operation: K, input: OperationMap[K]['input']): Promise<OperationMap[K]['output']> {
+        if (DESKTOP_ONLY_OPERATIONS.includes(operation))
+            this.fail('UNAVAILABLE', 'This action needs the Drift Studio desktop app.');
         validateRequest(operation, input);
         assertCapability(this.state, operation);
         const key = operation + (input && typeof input === 'object' && 'id' in input ? String(input.id) : '');

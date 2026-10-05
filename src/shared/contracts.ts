@@ -323,7 +323,36 @@ export interface OperationMap {
         input: undefined;
         output: void;
     };
+    /** Desktop only (added in the Claude integration phase): native picker in main, then ffprobe indexing. Empty array if cancelled. */
+    importNative: {
+        input: undefined;
+        output: ClipAsset[];
+    };
+    /** Desktop only: native picker to relink a missing clip. null if cancelled. */
+    relinkNative: {
+        input: {
+            id: string;
+        };
+        output: ClipAsset | null;
+    };
+    /** Desktop only: native picker for user-supplied music; returns an authorized handle. */
+    pickMusic: {
+        input: undefined;
+        output: {
+            handle: string;
+            name: string;
+        } | null;
+    };
+    /** Desktop only: store (or clear) the OBS WebSocket password in OS-protected storage. */
+    setObsPassword: {
+        input: {
+            password: string | null;
+        };
+        output: void;
+    };
 }
+/** Operations only the desktop bridge implements; DemoAdapter rejects them. */
+export const DESKTOP_ONLY_OPERATIONS: Operation[] = ['importNative', 'relinkNative', 'pickMusic', 'setObsPassword'];
 export type Operation = keyof OperationMap;
 export interface StudioService {
     readonly mode: 'demo' | 'desktop';

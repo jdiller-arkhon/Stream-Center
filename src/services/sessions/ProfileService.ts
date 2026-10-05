@@ -49,7 +49,8 @@ export class ProfileService {
     const profile = SessionProfile.parse({
       ...input,
       name: input.name.trim(),
-      id: existing?.id ?? newId('prof'),
+      // Keep a caller-supplied id (the renderer creates its own) so both sides agree.
+      id: existing?.id ?? input.id ?? newId('prof'),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     });

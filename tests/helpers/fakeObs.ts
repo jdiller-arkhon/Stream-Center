@@ -152,9 +152,11 @@ export class FakeObs {
         return { outputActive: this.streaming, outputReconnecting: false, outputDuration: 0, outputSkippedFrames: 0, outputTotalFrames: 0 };
       case 'StartStream':
         this.streaming = true;
+        setTimeout(() => this.emit('StreamStateChanged', { outputActive: true, outputState: 'OBS_WEBSOCKET_OUTPUT_STARTED' }), 10);
         return undefined;
       case 'StopStream':
         this.streaming = false;
+        setTimeout(() => this.emit('StreamStateChanged', { outputActive: false, outputState: 'OBS_WEBSOCKET_OUTPUT_STOPPED' }), 10);
         return undefined;
       case 'GetStats':
         return {

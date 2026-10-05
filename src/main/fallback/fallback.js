@@ -1,11 +1,12 @@
 (function () {
-  var api = window.driftDesktop;
+  var api = window.drift;
   var caps = document.getElementById('caps');
   var obs = document.getElementById('obs');
   if (!api) { caps.textContent = 'Desktop bridge unavailable.'; return; }
-  function show(el, r) { el.textContent = JSON.stringify(r.ok ? r.data : r.error, null, 2); }
-  api.invoke('system.getCapabilities', {}).then(function (r) { show(caps, r); });
-  api.invoke('obs.getState', {}).then(function (r) { show(obs, r); });
-  api.on('obs.state', function (s) { obs.textContent = JSON.stringify(s, null, 2); });
-  document.getElementById('connect').addEventListener('click', function () { api.invoke('obs.connect', {}); });
+  function show(s) { caps.textContent = JSON.stringify(s.capabilities, null, 2); obs.textContent = JSON.stringify(s.obs, null, 2); }
+  api.onState(show);
+  api.readState().then(show, function (e) { caps.textContent = String(e); });
+  document.getElementById('connect').addEventListener('click', function () {
+    api.readState().then(function (s) { return api.request('connect', { host: s.settings.obsHost, port: s.settings.obsPort }, String(Date.now())); }).catch(function (e) { obs.textContent = String(e); });
+  });
 })();
