@@ -38,6 +38,9 @@ import { isProcessRunning, launch, processNameFor } from '../sessions/launcher';
 
 const KV_PROFILES = 'ui.profiles';
 const KV_SELECTED = 'ui.selectedProfileId';
+const KV_VOICE = 'ui.voiceClip';
+/** Profiles were removed at the user's request: there is exactly one game setup, stored under this id. */
+const SETUP_ID = 'setup';
 const KV_PROJECTS = 'ui.projects';
 const KV_APPEARANCE = 'ui.appearance';
 const KV_MUSIC = 'ui.music';
@@ -82,6 +85,10 @@ export interface BridgeOptions {
   /** Called with every new snapshot (already throttled). */
   publish: (snapshot: StudioSnapshot) => void;
   throttleMs?: number;
+  /** Location of the offline speech model (null when it is not installed). */
+  voiceModelPath?: () => string | null;
+  /** Called when the voice listener should start (true) or stop (false). */
+  onVoiceWanted?: (wanted: boolean) => void;
 }
 
 export class StudioBridge {
@@ -100,6 +107,8 @@ export class StudioBridge {
   private disk: { freeBytes: number } | null = null;
   private streamLabel: string | null = null;
   private disposed = false;
+  private voice: NonNullable<StudioSnapshot['voice']> = { state: 'off', detail: null, device: null, lastHeardAt: null };
+  private lastVoiceClip = 0;
 
   constructor(
     private readonly core: DriftCore,
@@ -227,7 +236,6 @@ export class StudioBridge {
     if (st.currentScene !== this.sourcesScene && core.obs.connected) await this.refreshSources();
     const settings = core.settings.get();
     const profiles = this.uiProfiles();
-    const selected = kvGet<string>(core.db, KV_SELECTED);
     const active = core.sessions.getActive();
     const recs = (core.db.prepare('SELECT doc FROM clips ORDER BY imported_at DESC LIMIT 1000').all() as Array<{ doc: string }>).map((r) => JSON.parse(r.doc) as ClipRecord);
     const connection: UiConnection = st.connection.state === 'reconnecting' ? 'connecting' : st.connection.state;
@@ -252,7 +260,7 @@ export class StudioBridge {
       },
       audio: this.mapAudio(),
       profiles,
-      selectedProfileId: selected && profiles.some((p) => p.id === selected) ? selected : (profiles[0]?.id ?? UNCONFIGURED),
+      selectedProfileId: profiles[0]?.id ?? UNCONFIGURED,
       sessions: core.sessions.list(50).map((s) => this.mapSession(s)),
       activeSessionId: active?.id ?? null,
       clips: recs.map((r) => this.mapClip(r)),
@@ -269,9 +277,12 @@ export class StudioBridge {
         transcription: settings.transcription.enabled,
         workerLimit: settings.performance.maxConcurrentJobs >= 2 ? 2 : 1,
         shortcuts: settings.shortcuts.some((s) => s.scope === 'global' && s.enabled),
+        voiceClip: kvGet<boolean>(core.db, KV_VOICE) ?? false,
       },
       telemetry: { gameFps: null, diskFreeBytes: this.disk?.freeBytes ?? null },
+      voice: { ...this.voice },
       warnings: [
+        ...(this.voice.state === 'error' ? [`Voice command unavailable: ${this.voice.detail ?? 'unknown error'}`] : []),
         ...(st.streaming.active ? [`You are live${this.streamLabel ? ` · ${this.streamLabel}` : ''}: streaming through the service configured in OBS.`] : []),
         ...this.warnings(caps, st.connection.state === 'failed' ? st.connection.detail : null),
       ],
@@ -294,6 +305,9 @@ export class StudioBridge {
       transcription: cap(c.transcription),
       telemetry: { available: true, reason: null },
       streaming: cap(c.obs.streaming),
+      voice: this.opts.voiceModelPath?.()
+        ? { available: true, reason: null }
+        : { available: false, reason: 'The offline speech model is not installed. Run npm run fetch:voice-model (bundled automatically in the installer).' },
     };
   }
 
@@ -381,12 +395,50 @@ export class StudioBridge {
 
   // ---------------------------------------------------------------- stores
 
+  /** The single game setup (older multi-profile data: the selected profile becomes the setup). */
   private uiProfiles(): UiProfile[] {
-    return Object.values(kvGet<Record<string, UiProfile>>(this.core.db, KV_PROFILES) ?? {});
+    const all = kvGet<Record<string, UiProfile>>(this.core.db, KV_PROFILES) ?? {};
+    const setup = all[SETUP_ID] ?? all[kvGet<string>(this.core.db, KV_SELECTED) ?? ''] ?? Object.values(all)[0];
+    return setup ? [{ ...setup, id: SETUP_ID }] : [];
   }
 
   private uiProjects(): UiProject[] {
     return Object.values(kvGet<Record<string, UiProject>>(this.core.db, KV_PROJECTS) ?? {}).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  // ---------------------------------------------------------------- voice ("Clip that")
+
+  /** True when the user enabled the voice command and the offline model is installed. */
+  voiceWanted(): boolean {
+    return (kvGet<boolean>(this.core.db, KV_VOICE) ?? false) && !!this.opts.voiceModelPath?.();
+  }
+
+  setVoiceStatus(s: { state: 'off' | 'loading' | 'listening' | 'error'; detail: string | null; device: string | null }): void {
+    this.voice = { ...this.voice, ...s };
+    this.schedule();
+  }
+
+  /** The voice host heard the phrase: save a replay exactly like the Save Replay button. */
+  async voiceHeard(text: string, confidence: number): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastVoiceClip < 4000) return; // one clip per utterance
+    this.lastVoiceClip = now;
+    this.voice = { ...this.voice, lastHeardAt: new Date(now).toISOString() };
+    const st = this.core.obs.getState();
+    if (!this.core.obs.connected || !st.replayBuffer.active) {
+      this.core.notice('warning', 'Heard “Clip that”', 'The OBS replay buffer is not running, so nothing was saved.');
+      this.schedule();
+      return;
+    }
+    this.core.sessions.recordActive('note', `Voice: “${text}” (confidence ${Math.round(confidence * 100)}%)`);
+    try {
+      const clip = (await this.request('saveReplay', undefined, `voice-${now}`)) as UiClip;
+      this.core.notice('success', 'Clipped by voice', clip.name, clip.id);
+    } catch (err) {
+      const e = err instanceof BridgeError ? err.error.message : String(err);
+      this.core.notice('error', 'Voice clip failed', e);
+    }
+    this.schedule();
   }
 
   /** Resolves drift-media://music/<token> to the file the user picked (authorized handles only). */
@@ -460,38 +512,26 @@ export class StudioBridge {
         ok(await core.invoke('settings.setObsPassword', { password }));
         return undefined;
       }
-      case 'selectProfile': {
-        const { id } = p as OperationMap['selectProfile']['input'];
-        if (!this.uiProfiles().some((x) => x.id === id)) fail('NOT_FOUND', 'Profile not found');
-        kvSet(core.db, KV_SELECTED, id);
-        this.applyProfileHotkey();
-        return undefined; // never touches OBS outputs: a live stream keeps running
-      }
+      case 'selectProfile':
+        // Single setup: nothing to switch. Never touches OBS outputs (a live stream keeps running).
+        this.requireProfile((p as OperationMap['selectProfile']['input']).id);
+        return undefined;
       case 'saveProfile': {
-        const profile = this.normalizeProfile(validateProfile(p));
-        const all = kvGet<Record<string, UiProfile>>(core.db, KV_PROFILES) ?? {};
-        if (profile.hotkey) {
-          const clash = Object.values(all).find((x) => x.id !== profile.id && x.hotkey && x.hotkey.toLowerCase() === profile.hotkey.toLowerCase());
-          if (clash) fail('CONFLICT', `${profile.hotkey} is already assigned to ${clash.name}`);
-        }
+        const profile = { ...this.normalizeProfile(validateProfile(p)), id: SETUP_ID };
         core.profiles.save(this.toCoreProfile(profile));
-        all[profile.id] = profile;
-        kvSet(core.db, KV_PROFILES, all);
-        if (!kvGet<string>(core.db, KV_SELECTED)) kvSet(core.db, KV_SELECTED, profile.id);
+        kvSet(core.db, KV_PROFILES, { [SETUP_ID]: profile });
+        kvSet(core.db, KV_SELECTED, SETUP_ID);
         this.applyProfileHotkey();
         return undefined;
       }
       case 'prepareSession': {
-        const { profileId } = p as OperationMap['prepareSession']['input'];
-        this.requireProfile(profileId);
-        const checks = ok(await core.invoke('sessions.preflight', { profileId }));
+        this.requireProfile((p as OperationMap['prepareSession']['input']).profileId);
+        const checks = ok(await core.invoke('sessions.preflight', { profileId: SETUP_ID }));
         return { steps: checks.map((c) => ({ label: c.label, ok: c.status === 'pass' || c.status === 'skipped' || c.status === 'warn', detail: c.detail })) };
       }
       case 'startSession': {
-        const { profileId } = p as OperationMap['startSession']['input'];
-        this.requireProfile(profileId);
-        kvSet(core.db, KV_SELECTED, profileId);
-        return this.mapSession(ok(await core.invoke('sessions.start', { profileId })));
+        this.requireProfile((p as OperationMap['startSession']['input']).profileId);
+        return this.mapSession(ok(await core.invoke('sessions.start', { profileId: SETUP_ID })));
       }
       case 'endSession': {
         const active = core.sessions.getActive() ?? fail('NOT_FOUND', 'No session is active');
@@ -629,8 +669,15 @@ export class StudioBridge {
     return { ...p, game, name };
   }
 
-  private requireProfile(id: string): UiProfile {
-    return this.uiProfiles().find((x) => x.id === id) ?? fail('NOT_FOUND', 'Save this profile before using it');
+  /** Any id the renderer sends refers to the one setup; it must have been saved first. */
+  private requireProfile(_id: string): UiProfile {
+    const setup = this.uiProfiles()[0] ?? fail('NOT_FOUND', 'Set up your game first (Settings → General → Game session)');
+    try {
+      this.core.profiles.get(SETUP_ID);
+    } catch {
+      this.core.profiles.save(this.toCoreProfile(setup)); // migrate older profile data
+    }
+    return setup;
   }
 
   private toCoreProfile(p: UiProfile): SessionProfileInput {
@@ -659,8 +706,7 @@ export class StudioBridge {
   /** The selected profile's hotkey drives the global Save Replay shortcut (when shortcuts are enabled). */
   private applyProfileHotkey(): void {
     const s = this.core.settings.get();
-    const selected = kvGet<string>(this.core.db, KV_SELECTED);
-    const hotkey = this.uiProfiles().find((x) => x.id === selected)?.hotkey.trim() || null;
+    const hotkey = this.uiProfiles()[0]?.hotkey.trim() || null;
     const globalOn = s.shortcuts.some((x) => x.scope === 'global' && x.enabled);
     const next = s.shortcuts.map((x) => (x.action === 'saveReplay' ? { ...x, accelerator: hotkey ?? x.accelerator, enabled: globalOn && (hotkey ?? x.accelerator) !== null } : x));
     try {
@@ -732,6 +778,8 @@ export class StudioBridge {
     });
     if (!r.ok) throw new DriftFailure(r.error.code, r.error.message, { detail: r.error.detail });
     kvSet(core.db, KV_APPEARANCE, next.appearance);
+    kvSet(core.db, KV_VOICE, next.voiceClip === true);
+    this.opts.onVoiceWanted?.(this.voiceWanted());
     this.applyProfileHotkey();
     void this.refreshDisk();
   }

@@ -1,4 +1,4 @@
-import { API_VERSION, ServiceError, type Operation, type StudioSnapshot, type EditProject, type SessionProfile } from './contracts';
+import { API_VERSION, ServiceError, type Capability, type Operation, type StudioSnapshot, type EditProject, type SessionProfile } from './contracts';
 export const invalid = (message: string): never => { throw new ServiceError({ code: 'INVALID_INPUT', message, recoverable: true, details: null }); };
 const obj = (x: unknown): Record<string, unknown> => { if (!x || typeof x !== 'object' || Array.isArray(x))
     invalid('Expected an object'); return x as Record<string, unknown>; };
@@ -25,7 +25,7 @@ function project(value: unknown) { const p = obj(value); for (const k of ['id', 
     str(p[k], k); date(p.updatedAt); one(p.aspect, ['16:9', '9:16'], 'aspect'); number(p.cropX, 0, 100, 'crop'); number(p.cropY, 0, 100, 'crop'); bool(p.webcam, 'webcam'); bool(p.safeAreas, 'safe areas'); nullable(p.musicHandle, x => str(x, 'music')); number(p.musicGain, 0, 1, 'music gain'); number(p.originalGain, 0, 1, 'original gain'); const style = obj(p.captionStyle); str(style.font, 'font'); number(style.size, 12, 96, 'caption size'); str(style.color, 'caption color'); one(style.position, ['top', 'middle', 'bottom'], 'caption position'); list(p.captions, 'captions').forEach(c => { const v = obj(c); id(v.id); str(v.text, 'caption'); number(v.startMs, 0, 86400000, 'caption start'); number(v.endMs, Number(v.startMs) + 1, 86400000, 'caption end'); }); list(p.tracks, 'tracks').forEach(t => { const v = obj(t); id(v.id); str(v.name, 'track'); one(v.kind, ['video', 'audio'], 'track type'); list(v.segments, 'segments').forEach(s => { const z = obj(s); id(z.id); id(z.assetId); number(z.inMs, 0, 86400000, 'in'); number(z.outMs, Number(z.inMs) + 1, 86400000, 'out'); number(z.offsetMs, 0, 86400000, 'offset'); number(z.gain, 0, 1, 'gain'); number(z.fadeInMs, 0, 10000, 'fade'); number(z.fadeOutMs, 0, 10000, 'fade'); }); }); }
 function clip(value: unknown) { const p = obj(value); id(p.id); str(p.name, 'name'); str(p.game, 'game'); nullable(p.sessionId, id); date(p.createdAt); number(p.durationMs, 1, 86400000, 'duration'); list(p.tags, 'tags').forEach(x => str(x, 'tag')); bool(p.favorite, 'favorite'); bool(p.fixture, 'fixture'); one(p.status, ['ready', 'missing', 'processing', 'failed'], 'clip status'); nullable(p.mediaHandle, x => str(x, 'media handle')); nullable(p.thumbnailUrl, x => str(x, 'thumbnail',2000000)); }
 function settings(value: unknown) { const p = obj(value); for (const k of ['mediaFolder', 'obsHost'])
-    str(p[k], k); number(p.obsPort, 1, 65535, 'port'); one(p.appearance, ['studio', 'contrast'], 'appearance'); bool(p.transcription, 'transcription'); bool(p.shortcuts, 'shortcuts'); one(p.workerLimit, [1, 2], 'worker limit'); }
+    str(p[k], k); number(p.obsPort, 1, 65535, 'port'); one(p.appearance, ['studio', 'contrast'], 'appearance'); bool(p.transcription, 'transcription'); bool(p.shortcuts, 'shortcuts'); one(p.workerLimit, [1, 2], 'worker limit'); if (p.voiceClip !== undefined) bool(p.voiceClip, 'voice command'); }
 function job(value: unknown) { const j = obj(value); for (const k of ['id', 'projectId', 'name'])
     str(j[k], k); one(j.status, ['accepted', 'processing', 'completed', 'failed', 'canceled'], 'job status'); number(j.progress, 0, 100, 'progress'); bool(j.simulated, 'simulated'); nullable(j.outputHandle, x => str(x, 'output')); nullable(j.error, x => { const e = obj(x); str(e.code, 'error code'); str(e.message, 'error'); bool(e.recoverable, 'recoverable'); nullable(e.details, v => str(v, 'details')); }); }
 export const validateProfile = (p: unknown): SessionProfile => { profile(p); return p as SessionProfile; };
@@ -127,6 +127,7 @@ export function validateSnapshot(value: unknown): StudioSnapshot {
         bool(c.available, 'capability');
         nullable(c.reason, x => str(x, 'reason'));
     }
+    if (caps.voice !== undefined) { const v = obj(caps.voice); bool(v.available, 'capability'); nullable(v.reason, x => str(x, 'reason')); }
     const o = obj(p.obs);
     one(o.connection, ['disconnected', 'connecting', 'connected', 'failed'], 'connection');
     str(o.scene, 'scene');
@@ -151,6 +152,7 @@ export function validateSnapshot(value: unknown): StudioSnapshot {
     nullable(t.gameFps, x => number(x, 0, 2000, 'game fps'));
     nullable(t.diskFreeBytes, x => number(x, 0, Number.MAX_SAFE_INTEGER, 'storage'));
     list(p.warnings, 'warnings').forEach(x => str(x, 'warning'));
+    if (p.voice !== undefined) { const v = obj(p.voice); one(v.state, ['off', 'loading', 'listening', 'error'], 'voice state'); nullable(v.detail, x => str(x, 'voice detail')); nullable(v.device, x => str(x, 'voice device')); nullable(v.lastHeardAt, date); }
     return p as unknown as StudioSnapshot;
 }
 export function validateResponse(op: Operation, value: unknown): unknown {
@@ -180,7 +182,7 @@ export function validateResponse(op: Operation, value: unknown): unknown {
 }
 /** Renderer check; main must independently repeat capability and authorization checks. */
 export function assertCapability(state: StudioSnapshot, operation: Operation): void {
-    const map: Partial<Record<Operation, keyof StudioSnapshot['capabilities']>> = { connect: 'obs', recording: 'recording', replay: 'replay', saveReplay: 'replay', scene: 'obs', streaming: 'streaming', audio: 'obsAudio', launchGame: 'launch', startSession: 'launch', importClips: 'import', importNative: 'import', relinkNative: 'import', pickMusic: 'import', export: 'export' };
+    const map: Partial<Record<Operation, Capability>> = { connect: 'obs', recording: 'recording', replay: 'replay', saveReplay: 'replay', scene: 'obs', streaming: 'streaming', audio: 'obsAudio', launchGame: 'launch', startSession: 'launch', importClips: 'import', importNative: 'import', relinkNative: 'import', pickMusic: 'import', export: 'export' };
     const capability = map[operation];
     if (!capability)
         return;

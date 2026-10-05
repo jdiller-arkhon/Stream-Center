@@ -20,8 +20,9 @@
     "desktop:build": "node scripts/build-desktop.mjs",
     "desktop:start": "npm run build && node scripts/build-desktop.mjs && electron .",
     "desktop:safe": "npm run build && node scripts/build-desktop.mjs && electron . --safe-mode",
-    "desktop:package": "npm run build && node scripts/build-desktop.mjs && electron-builder --win nsis --x64",
-    "test:e2e": "npm run build && node scripts/build-desktop.mjs && node tests/electron-e2e/run.mjs"
+    "desktop:package": "npm run build && node scripts/build-desktop.mjs && node scripts/fetch-voice-model.mjs && electron-builder --win nsis --x64",
+    "test:e2e": "npm run build && node scripts/build-desktop.mjs && node tests/electron-e2e/run.mjs",
+    "fetch:voice-model": "node scripts/fetch-voice-model.mjs"
   },
   "engines": {
     "node": ">=22.13"
@@ -46,6 +47,7 @@
     "typescript": "^7.0.2",
     "vite": "5.4.21",
     "vitest": "^3.2.4",
+    "vosk-browser": "0.0.8",
     "ws": "^8.22.0",
     "zod": "^4.6.5"
   },
@@ -68,6 +70,13 @@
         "to": "ffmpeg",
         "filter": [
           "**/*"
+        ]
+      },
+      {
+        "from": "resources/models",
+        "to": "models",
+        "filter": [
+          "*.tar.gz"
         ]
       }
     ],

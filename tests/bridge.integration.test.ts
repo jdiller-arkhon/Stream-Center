@@ -127,8 +127,10 @@ describe('StudioBridge (renderer protocol v1 over desktop services)', () => {
     };
     await call('saveProfile', profile);
     let s = await state();
-    expect(s.profiles.map((p) => p.id)).toEqual(['p-siege']);
-    expect(s.selectedProfileId).toBe('p-siege');
+    // Profiles were removed: whatever id the renderer sends, there is one game setup.
+    expect(s.profiles.map((p) => p.id)).toEqual(['setup']);
+    expect(s.selectedProfileId).toBe('setup');
+    expect(s.profiles[0]!.game).toBe('Rainbow Six Siege');
     expect(platform.shortcutsRegistered.has('Ctrl+Shift+F8')).toBe(true); // profile hotkey drives Save Replay
 
     const prep = await call<{ steps: Array<{ label: string; ok: boolean; detail: string }> }>('prepareSession', { profileId: 'p-siege' });
@@ -238,8 +240,11 @@ describe('StudioBridge (renderer protocol v1 over desktop services)', () => {
     await call('launchGame', { profileId: 'u' });
     expect(platform.externals).toEqual(['steam://rungameid/1085660']);
     await expect(call('saveProfile', { id: 'x', name: 'Bad', game: 'X', gamePath: 'file:///C:/Windows/System32/cmd.exe', scene: '', destination: dir, replayDurationMs: 30000, audioPreset: 'Balanced', companionApps: [], hotkey: '' })).rejects.toThrow(/Unsupported launcher/);
-    await expect(call('saveProfile', { id: 'y', name: 'Dup', game: 'X', gamePath: 'steam://rungameid/3', scene: '', destination: dir, replayDurationMs: 30000, audioPreset: 'Balanced', companionApps: [], hotkey: 'Ctrl+1' })).resolves.toBeUndefined();
-    await expect(call('saveProfile', { id: 'z', name: 'Dup2', game: 'X', gamePath: 'steam://rungameid/4', scene: '', destination: dir, replayDurationMs: 30000, audioPreset: 'Balanced', companionApps: [], hotkey: 'ctrl+1' })).rejects.toThrow(/already assigned/);
+    // A second save replaces the single setup instead of creating another profile.
+    await call('saveProfile', { id: 'y', name: 'Other', game: 'Valorant', gamePath: 'steam://rungameid/3', scene: '', destination: dir, replayDurationMs: 30000, audioPreset: 'Balanced', companionApps: [], hotkey: 'Ctrl+1' });
+    const s = await state();
+    expect(s.profiles).toHaveLength(1);
+    expect(s.profiles[0]).toMatchObject({ id: 'setup', game: 'Valorant', gamePath: 'steam://rungameid/3' });
   });
 
   it('native import, relink after a move, user music in export, and settings round-trip', async () => {
@@ -286,6 +291,17 @@ describe('StudioBridge (renderer protocol v1 over desktop services)', () => {
     expect(fs.existsSync(path.join(dir, 'lib2'))).toBe(true);
     expect(platform.shortcutsRegistered.size).toBe(0);
     await expect(call('saveSettings', { ...s.settings, mediaFolder: 'relative/folder' })).rejects.toThrow(/full folder path/);
+  });
+
+  it('migrates older multi-profile data to the single setup (selected profile wins)', async () => {
+    const kv = (await import('../src/services/core/database')).kvSet;
+    const old = (id: string, game: string) => ({ id, name: game, game, gamePath: `steam://rungameid/${id.length}`, scene: 'Gameplay', destination: dir, replayDurationMs: 30000, audioPreset: 'Balanced', companionApps: [], hotkey: '' });
+    kv(core.db, 'ui.profiles', { a: old('a', 'Old A'), bb: old('bb', 'Old B') });
+    kv(core.db, 'ui.selectedProfileId', 'bb');
+    const s = await state();
+    expect(s.profiles).toEqual([{ ...old('bb', 'Old B'), id: 'setup' }]);
+    const prep = await call<{ steps: unknown[] }>('prepareSession', { profileId: 'bb' });
+    expect(prep.steps.length).toBeGreaterThan(0);
   });
 
   it('a failed export reports the error and can be retried after the cause is fixed', async () => {

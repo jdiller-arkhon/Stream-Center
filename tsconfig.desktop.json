@@ -24,6 +24,7 @@
   "include": [
     "src/main",
     "src/preload",
+    "src/voice",
     "src/services/contract",
     "src/services/bridge",
     "src/services/core",

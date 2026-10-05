@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useSyncExternalStore, useCallback, type ReactNode } from 'react';
 import type { ClipAsset, Operation, OperationMap, StudioService } from '../shared/contracts';
-export type Route = 'Command Center' | 'ClipForge' | 'Sessions' | 'Stream Controls' | 'Audio' | 'Profiles' | 'Settings';
+export type Route = 'Command Center' | 'ClipForge' | 'Sessions' | 'Stream Controls' | 'Audio' | 'Settings';
 interface Context {
     service: StudioService;
     route: Route;

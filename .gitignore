@@ -10,3 +10,4 @@ test-results/
 .vite/
 resources/ffmpeg/*.exe
 docs/screenshots/*.png
+resources/models/*.tar.gz

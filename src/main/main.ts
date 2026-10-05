@@ -29,6 +29,47 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0);
 }
 
+const VOICE_MODEL = 'vosk-model-small-en-us-0.15.tar.gz';
+/** Offline speech model: bundled in resources/models (installer) or fetched by scripts/fetch-voice-model.mjs (dev). */
+function voiceModelPath(): string | null {
+  for (const dir of [path.join(process.resourcesPath ?? '', 'models'), path.join(app.getAppPath(), 'resources', 'models'), path.join(app.getPath('userData'), 'models')]) {
+    const p = path.join(dir, VOICE_MODEL);
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+let voiceWindow: BrowserWindow | null = null;
+
+/** Starts or stops the hidden voice host (offline "Clip that" recogniser). */
+function setVoiceHost(enabled: boolean): void {
+  if (enabled && !voiceWindow) {
+    voiceWindow = new BrowserWindow({
+      show: false,
+      width: 320,
+      height: 200,
+      webPreferences: {
+        preload: path.join(__dirname, '..', 'preload', 'voice-preload.cjs'),
+        contextIsolation: true,
+        sandbox: true,
+        nodeIntegration: false,
+        backgroundThrottling: false,
+        autoplayPolicy: 'no-user-gesture-required',
+        devTools: !app.isPackaged,
+      },
+    });
+    hardenContents(voiceWindow.webContents);
+    voiceWindow.on('closed', () => {
+      voiceWindow = null;
+    });
+    void voiceWindow.loadURL('drift-app://voice/index.html');
+  } else if (!enabled && voiceWindow) {
+    voiceWindow.destroy();
+    voiceWindow = null;
+    bridge?.setVoiceStatus({ state: 'off', detail: null, device: null });
+  }
+}
+
 let core: DriftCore | null = null;
 let bridge: StudioBridge | null = null;
 const TEST_MODE = !app.isPackaged && process.env.DRIFT_TEST_MODE === '1';
@@ -146,6 +187,20 @@ const CSP = [
   "form-action 'none'",
 ].join('; ');
 
+/**
+ * The hidden voice host gets its own, separate policy: the Vosk WebAssembly build needs
+ * 'unsafe-eval'. That page contains only our static voice script, has no app bridge, and
+ * can reach nothing but the local speech model.
+ */
+const CSP_VOICE = [
+  "default-src 'none'",
+  "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'",
+  "worker-src blob:",
+  'connect-src drift-media:',
+  "base-uri 'none'",
+  "form-action 'none'",
+].join('; ');
+
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -166,6 +221,7 @@ const MIME: Record<string, string> = {
   '.webm': 'video/webm',
   '.mkv': 'video/x-matroska',
   '.ico': 'image/x-icon',
+  '.gz': 'application/gzip',
 };
 
 function rendererRoot(): { dir: string; fallback: boolean } {
@@ -178,6 +234,12 @@ function registerProtocols(): void {
   const root = rendererRoot();
   protocol.handle('drift-app', async (req) => {
     const url = new URL(req.url);
+    if (url.host === 'voice') {
+      const name = decodeURIComponent(url.pathname).replace(/^\//, '') || 'index.html';
+      if (!['index.html', 'voice.js'].includes(name)) return new Response('Not found', { status: 404 });
+      const body = await fs.promises.readFile(path.join(__dirname, '..', 'voice', name));
+      return new Response(body, { headers: { 'content-type': MIME[path.extname(name)] ?? 'text/plain', 'content-security-policy': CSP_VOICE, 'x-content-type-options': 'nosniff' } });
+    }
     if (url.host !== 'renderer') return new Response('Not found', { status: 404 });
     let rel = decodeURIComponent(url.pathname);
     if (rel === '/' || rel === '') rel = '/index.html';
@@ -198,7 +260,7 @@ function registerProtocols(): void {
     const url = new URL(req.url);
     const kind = url.host;
     const id = decodeURIComponent(url.pathname.replace(/^\//, ''));
-    if (!core || !['clip', 'proxy', 'thumb', 'music', 'preview'].includes(kind) || !/^[\w-]{1,128}$/.test(id)) return new Response('Not found', { status: 404, headers: MEDIA_CORS });
+    if (!core || !['clip', 'proxy', 'thumb', 'music', 'preview', 'model'].includes(kind) || !/^[\w-]{1,128}$/.test(id)) return new Response('Not found', { status: 404, headers: MEDIA_CORS });
     if (kind === 'preview') {
       try {
         const shot = await core.obs.preview(960);
@@ -207,6 +269,10 @@ function registerProtocols(): void {
       } catch {
         return new Response('Preview unavailable', { status: 503, headers: MEDIA_CORS });
       }
+    }
+    if (kind === 'model') {
+      const model = id === 'vosk-small-en' ? voiceModelPath() : null;
+      return model ? serveFile(model, req.headers.get('range')) : new Response('Not found', { status: 404, headers: MEDIA_CORS });
     }
     const file = kind === 'music' ? (bridge?.resolveMusic(id) ?? null) : core.library.resolveMedia(kind as 'clip' | 'proxy' | 'thumb', id);
     if (!file) return new Response('Not found', { status: 404, headers: MEDIA_CORS });
@@ -289,30 +355,37 @@ function createWindow(): void {
       webSecurity: true,
       allowRunningInsecureContent: false,
       spellcheck: false,
+      // Keep listening for "Clip that" while a game has focus.
+      backgroundThrottling: false,
       devTools: !app.isPackaged || process.env.DRIFT_DEVTOOLS === '1',
     },
   });
   hardenContents(mainWindow.webContents);
   mainWindow.once('ready-to-show', () => mainWindow?.show());
-  mainWindow.on('closed', () => (mainWindow = null));
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    setVoiceHost(false); // the hidden voice window must not keep the app alive
+  });
   const url = DEV_URL && !app.isPackaged ? DEV_URL : `${APP_ORIGIN}/index.html`;
   void mainWindow.loadURL(url);
 }
 
 function configureSession(): void {
   const ses = session.defaultSession;
-  // Microphone access (for renderer-side level preview) only; everything else is denied.
+  // Microphone (audio only) is granted to the hidden voice host alone; the UI never needs it.
+  const isVoiceUrl = (raw: string) => raw.startsWith('drift-app://voice/');
   ses.setPermissionRequestHandler((wc, permission, callback, details) => {
-    const fromApp = isAppUrl(details.requestingUrl ?? wc.getURL());
-    if (fromApp && permission === 'media') {
+    const url = details.requestingUrl ?? wc.getURL();
+    if (permission === 'media') {
       const types = (details as { mediaTypes?: string[] }).mediaTypes ?? [];
-      return callback(types.length > 0 && types.every((t) => t === 'audio'));
+      return callback(isVoiceUrl(url) && types.length > 0 && types.every((t) => t === 'audio'));
     }
-    callback(fromApp && permission === 'clipboard-sanitized-write');
+    callback(isAppUrl(url) && permission === 'clipboard-sanitized-write');
   });
   ses.setPermissionCheckHandler((wc, permission, origin) => {
-    const fromApp = isAppUrl(origin || wc?.getURL() || '');
-    return fromApp && (permission === 'media' || permission === 'clipboard-sanitized-write');
+    const url = origin || wc?.getURL() || '';
+    if (permission === 'media') return isVoiceUrl(url) || isVoiceUrl(wc?.getURL() ?? '');
+    return isAppUrl(url) && permission === 'clipboard-sanitized-write';
   });
   if (DEV_URL && !app.isPackaged) {
     ses.webRequest.onHeadersReceived((details, cb) => {
@@ -324,6 +397,14 @@ function configureSession(): void {
 function registerIpc(): void {
   const untrusted = { ok: false, error: { code: 'INVALID_INPUT', message: 'Request from an untrusted frame', recoverable: false, details: null } };
   const starting = { ok: false, error: { code: 'BUSY', message: 'Drift Studio is still starting', recoverable: true, details: null } };
+  ipcMain.on('voice:event', (event, msg: { type?: string; state?: string; detail?: string | null; device?: string | null; text?: string; confidence?: number }) => {
+    if (!voiceWindow || event.sender !== voiceWindow.webContents || !bridge) return;
+    if (msg?.type === 'status' && ['loading', 'listening', 'error'].includes(String(msg.state))) {
+      bridge.setVoiceStatus({ state: msg.state as 'loading' | 'listening' | 'error', detail: msg.detail ?? null, device: msg.device ?? null });
+    } else if (msg?.type === 'heard' && typeof msg.text === 'string') {
+      void bridge.voiceHeard(msg.text, Number(msg.confidence) || 0);
+    }
+  });
   ipcMain.handle('drift:readState', async (event) => {
     if (!isAppUrl(event.senderFrame?.url ?? '')) return untrusted;
     if (!bridge) return starting;
@@ -360,6 +441,8 @@ app.whenReady().then(async () => {
   const resourceDirs = [path.join(process.resourcesPath ?? '', 'ffmpeg'), path.join(app.getAppPath(), 'resources', 'ffmpeg')];
   core = new DriftCore({ platform: createPlatform(), resourceDirs, safeMode: SAFE_MODE, echoLogs: !app.isPackaged });
   bridge = new StudioBridge(core, {
+    voiceModelPath,
+    onVoiceWanted: (wanted) => setVoiceHost(wanted),
     publish: (snapshot) => {
       for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('drift:state', snapshot);
     },
@@ -370,6 +453,7 @@ app.whenReady().then(async () => {
   await core.start();
   await bridge.start();
   createWindow();
+  setVoiceHost(bridge.voiceWanted());
   // OBS peak meters only while the window is focused (no extra work while gaming).
   app.on('browser-window-focus', () => void bridge?.setMetersWanted(true));
   app.on('browser-window-blur', () => void bridge?.setMetersWanted(false));

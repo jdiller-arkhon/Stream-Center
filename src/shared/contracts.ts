@@ -7,7 +7,13 @@ export type Capability = 'obs' | 'recording' | 'replay' | 'preview' | 'launch' |
 export type Capabilities = Record<Capability, {
     available: boolean;
     reason: string | null;
-}>;
+}> & {
+    /** Desktop only (Claude phase): offline "Clip that" voice command. Optional so older snapshots stay valid. */
+    voice?: {
+        available: boolean;
+        reason: string | null;
+    };
+};
 export interface StructuredError {
     code: 'UNAVAILABLE' | 'INVALID_INPUT' | 'DISCONNECTED' | 'NOT_FOUND' | 'BUSY' | 'CANCELED' | 'IO_ERROR' | 'VERSION_MISMATCH';
     message: string;
@@ -150,6 +156,8 @@ export interface StudioSettings {
     transcription: boolean;
     workerLimit: 1 | 2;
     shortcuts: boolean;
+    /** Desktop only: listen for "Clip that" (offline). Optional so older stored settings stay valid. */
+    voiceClip?: boolean;
 }
 export interface StudioSnapshot {
     apiVersion: 1;
@@ -170,6 +178,13 @@ export interface StudioSnapshot {
         diskFreeBytes: number | null;
     };
     warnings: string[];
+    /** Desktop only: state of the offline "Clip that" listener. Optional so older snapshots stay valid. */
+    voice?: {
+        state: 'off' | 'loading' | 'listening' | 'error';
+        detail: string | null;
+        device: string | null;
+        lastHeardAt: string | null;
+    };
 }
 export interface OperationMap {
     connect: {

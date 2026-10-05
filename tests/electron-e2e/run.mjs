@@ -38,7 +38,7 @@ const until = async (fn, ms = 20000, label = 'condition') => {
 };
 const clip = (file, seconds, size = '1280x720') => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  execFileSync('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `testsrc2=size=${size}:rate=30:duration=${seconds}`, '-f', 'lavfi', '-i', `sine=frequency=440:duration=${seconds}`, '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', file]);
+  execFileSync('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `testsrc2=size=${size}:rate=30:duration=${seconds}`, '-f', 'lavfi', '-i', `sine=frequency=440:duration=${seconds}`, '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', '-metadata', `comment=${path.basename(file)} ${Date.now()}`, file]); // unique bytes: real replays differ, identical files are (correctly) de-duplicated
   return file;
 };
 
@@ -57,7 +57,18 @@ const pickFile = path.join(tmp, 'pick.json');
 const openLog = path.join(tmp, 'opened.log');
 fs.writeFileSync(pickFile, '[]');
 
+// "Clip that" is spoken into a fake microphone (Chromium switches) when a TTS voice is available.
+let voiceWav = null;
+try {
+  const raw = path.join(tmp, 'clip-that-raw.wav');
+  execFileSync('flite', ['-t', 'clip that', '-o', raw]);
+  voiceWav = path.join(tmp, 'clip-that.wav');
+  execFileSync('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono', '-i', raw, '-filter_complex', '[0]atrim=duration=1.5[s1];[0]atrim=duration=2.5[s2];[1]aresample=16000[v];[s1][v][s2]concat=n=3:v=0:a=1', '-ac', '1', '-ar', '16000', voiceWav]);
+} catch {
+  voiceWav = null;
+}
 const args = [root];
+if (voiceWav) args.unshift('--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${voiceWav}`);
 if (process.getuid?.() === 0) args.unshift('--no-sandbox'); // Chromium refuses root otherwise; the renderer sandbox flag stays on
 const app = await electron.launch({
   args,
@@ -114,8 +125,10 @@ try {
   await page.getByRole('button', { name: 'Save setup', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'detached' });
   await dismissToast();
-  const picker = await page.getByLabel('Current session profile').locator('option:checked').innerText().catch(() => '');
-  check('first-run setup names the profile after the game, not the placeholder', picker.endsWith(' session') && !picker.includes('Set up'), picker);
+  const summary = await page.locator('.profile-summary strong').innerText().catch(() => '');
+  check('first-run setup names the game, not the placeholder', summary === path.basename(game), summary);
+  check('profiles are gone: no Profiles page and no profile picker', (await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: /^Profiles/ }).count()) === 0 && (await page.getByLabel('Current session profile').count()) === 0);
+  check('the drift logo mark is in the sidebar and the hero', (await page.locator('.brand svg.brand-mark path').count()) === 4 && (await page.locator('.session-hero svg.hero-mark path').count()) === 4);
 
   // ---- Preflight + Start Session
   await page.getByRole('button', { name: 'Check setup', exact: true }).click();
@@ -138,6 +151,30 @@ try {
   check('highlight is tagged with the game from the profile', cardText.includes(path.basename(game)) && !cardText.includes('Choose a game'));
   check('highlight shows a real thumbnail', await page.locator('.highlight-card img').first().evaluate((img) => img.complete && img.naturalWidth > 0).catch(() => false));
   await page.screenshot({ path: path.join(shots, 'desktop-command-center.png') });
+
+  // ---- Voice: say "Clip that" (fake microphone plays a synthesized phrase)
+  if (voiceWav) {
+    const before = await page.locator('.highlight-card').count();
+    await nav('Settings');
+    await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
+    await page.getByLabel('Voice command: say “Clip that” to save a replay').check();
+    await page.getByRole('button', { name: 'Save settings', exact: true }).click();
+    await page.locator('.voice-status.listening').waitFor({ timeout: 30000 });
+    check('voice command starts listening offline (status shows “Say Clip that”)', (await page.locator('.voice-status').innerText()).includes('Clip that'));
+    await nav('Command Center');
+    await until(async () => (await page.locator('.highlight-card').count()) > before, 45000, 'voice clip').catch(() => null);
+    const after = await page.locator('.highlight-card').count();
+    check('saying “Clip that” saves a replay into the library', after > before, `${before} → ${after} highlights; OBS saves: ${obs.requests.filter((r) => r.type === 'SaveReplayBuffer').length}`);
+    await nav('Settings');
+    await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
+    await page.getByLabel('Voice command: say “Clip that” to save a replay').uncheck();
+    await page.getByRole('button', { name: 'Save settings', exact: true }).click();
+    await page.locator('.voice-status').waitFor({ state: 'detached', timeout: 10000 });
+    check('turning the voice command off stops listening', (await page.locator('.voice-status').count()) === 0);
+    await nav('Command Center');
+  } else {
+    console.log('SKIP  voice command checks (no flite text-to-speech available)');
+  }
 
   // ---- Capture controls
   await page.getByRole('button', { name: 'Start Recording', exact: true }).click();
@@ -169,7 +206,7 @@ try {
   await page.getByText('Completed', { exact: true }).waitFor({ timeout: 90000 });
   const outs = fs.existsSync(exportDir) ? fs.readdirSync(exportDir).filter((f) => f.endsWith('.mp4') && !f.includes('partial')) : [];
   check('export queue reports Completed only when a file exists', outs.length === 1, outs.join(', '));
-  check('export file is named after the draft (no doubled extension)', outs[0] === 'Replay 1.mp4', outs[0]);
+  check('export file is named after the draft (no doubled extension)', /^Replay \d+\.mp4$/.test(outs[0] ?? ''), outs[0]);
   if (outs[0]) {
     const p = probe(path.join(exportDir, outs[0]));
     const v = p.streams.find((s) => s.codec_type === 'video');
@@ -204,9 +241,9 @@ try {
   await page.getByRole('button', { name: 'Confirm Go Live' }).click();
   await page.getByRole('button', { name: 'End stream', exact: true }).waitFor({ timeout: 10000 });
   check('Go Live (after confirmation) starts streaming in OBS', obs.streaming);
-  await nav('Profiles');
+  await nav('Sessions');
   await nav('Stream Controls');
-  check('changing screens/profiles keeps the stream live', obs.streaming);
+  check('changing screens keeps the stream live', obs.streaming);
   await page.getByRole('button', { name: 'End stream', exact: true }).click();
   await page.getByRole('button', { name: 'Go Live', exact: true }).waitFor();
   check('End stream stops streaming in OBS', !obs.streaming);
@@ -241,8 +278,9 @@ try {
   await page.getByRole('button', { name: 'Start Session', exact: true }).waitFor();
   check('End Session ends the session (OBS outputs left as they are)', obs.replay === true);
 
-  for (const name of ['Stream Controls', 'Audio', 'Sessions', 'Profiles', 'Settings']) {
+  for (const name of ['Stream Controls', 'Audio', 'Sessions', 'Settings']) {
     await nav(name);
+    await page.waitForTimeout(600); // let the entrance animation settle
     await page.screenshot({ path: path.join(shots, `desktop-${name.toLowerCase().replace(' ', '-')}.png`) });
   }
   check('no renderer runtime errors', errors.length === 0, errors.join(' | '));

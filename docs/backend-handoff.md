@@ -9,6 +9,16 @@ Status date: 2026-10-05. Branch: `claude/wizardly-johnson-9f4gfl`.
 - **Not yet verified on Windows or against real OBS.** The Windows checklist below remains open.
 - **Visual theme:** at the user's request the UI uses an Apple-inspired white and purple-mist theme with a multi-hue colour system (`theme-mist-base.css`, generated, plus `theme-mist.css`). Layout and behaviour are ChatGPT's, unchanged.
 
+## Changes requested after integration
+
+- **Profiles removed.** There is one game setup: Settings → General → Game session (game name, path or launcher link, OBS scene, Save Replay hotkey). The bridge stores it under the fixed id `setup` and maps any profile id the renderer sends onto it. Older multi-profile data migrates automatically, with the selected profile becoming the setup. The protocol is unchanged; `selectProfile` is now a no-op.
+- **"Clip that" voice command** (Settings → Shortcuts, opt-in):
+  - **Recogniser:** Vosk, Apache-2.0, with a 41 MB small English model, fully offline. It listens only for the closed grammar `clip that | clip it | [unk]`, with a confidence threshold and a 4 s cooldown.
+  - **Isolation:** it runs in a **hidden, sandboxed voice window** (`src/voice`, served from `drift-app://voice/`). That window has its own CSP, because the WebAssembly build needs `'unsafe-eval'`, plus a two-message preload and microphone permission. The main UI keeps its strict CSP and gets no microphone access.
+  - **Saving:** when the phrase is heard, main calls the same save-replay path as the button. If the replay buffer is off, the user gets a notice instead.
+  - **Model files:** the model is fetched with a pinned SHA-256 by `npm run fetch:voice-model` and bundled by `desktop:package` into `resources/models`.
+- **Logo.** The supplied drift logo is redrawn as vector artwork (`src/renderer/components/Logo.tsx`): brand gradient in the sidebar, white on the hero, plus `public/favicon.svg` and `build/icon.png`/`icon.svg` for the installer.
+
 ## How the UI reaches the services
 
 ```
