@@ -28,6 +28,8 @@ React context owns view state. Service snapshots use `useSyncExternalStore`; upd
 
 ## Visual tokens and layout
 
+> **Update (Claude, at the user's request, 2026-10-05):** the user asked for an Apple-inspired, clean and professional look. `src/renderer/theme-apple.css` is loaded after `styles.css` and overrides only the visual layer: system font stack (SF Pro / Segoe UI Variable), 13 px base, neutral dark surfaces (`#121214` / `#1c1c1f` / `#26262a`), hairline separators, a translucent sidebar and toolbar, one blue accent `#0a84ff`, semantic green/orange/red, pill badges, sentence-case captions, and no glows or neon gradients. Layout, markup, responsive rules and behaviour are unchanged, and the 38 browser checks still pass. New visual work should use the tokens at the top of `theme-apple.css`. The palette described below is the original one, now superseded.
+
 `styles.css` defines the identity: foundation `#08090c`, panel `#101216`, raised `#171a20`, separator `#252930`, crisp white text, secondary `#929aa9`, icy cyan `#8ce8ee`, violet `#bca6ff`, amber `#f7cb7a`. Panel corners are 14px; buttons/fields 8px. Use the existing 4/8/12/16/20/24/32 spacing rhythm. Typography is a local system sans stack: no remote font calls. Telemetry uses tabular/monospace numbers.
 
 Command Center has an asymmetric hero and preflight panel, capture desk and pulse, then recent media. ClipForge is a three-column desktop workspace with the timeline below; its first row scales to window height. At <=1000px the inspector moves below the timeline, and at <=760px the library becomes horizontal and navigation collapses. Reduced-motion preferences disable transition effects. Decorations remain static while gaming.

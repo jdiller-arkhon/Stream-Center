@@ -5,6 +5,7 @@ import { StudioProvider } from './context';
 import { DemoAdapter } from '../services/DemoAdapter';
 import { DesktopAdapter } from '../services/DesktopAdapter';
 import './styles.css';
+import './theme-apple.css';
 class ErrorBoundary extends Component<{
     children: ReactNode;
 }, {
